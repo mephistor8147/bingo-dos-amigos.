@@ -1,0 +1,6 @@
+{
+  "name": "BidDrop - Leilões Relâmpago",
+  "description": "Plataforma de leilões rápidos com valor inicial baixo e cronômetro em tempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

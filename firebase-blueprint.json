@@ -1,0 +1,57 @@
+{
+  "projectInfo": {
+    "name": "BingoLive"
+  },
+  "collections": [
+    {
+      "name": "users",
+      "description": "Store user profiles",
+      "documentId": "uid",
+      "fields": [
+        { "name": "uid", "type": "string" },
+        { "name": "name", "type": "string" },
+        { "name": "cpf", "type": "string" },
+        { "name": "email", "type": "string" },
+        { "name": "phone", "type": "string" },
+        { "name": "photoURL", "type": "string" },
+        { "name": "coins", "type": "number", "default": 4000 },
+        { "name": "role", "type": "string", "description": "'admin' or 'player'" }
+      ]
+    },
+    {
+      "name": "rooms",
+      "description": "Bingo game rooms",
+      "documentId": "roomId",
+      "fields": [
+        { "name": "name", "type": "string" },
+        { "name": "entryFee", "type": "number" },
+        { "name": "scheduledTime", "type": "number" },
+        { "name": "maxPlayers", "type": "number" },
+        { "name": "status", "type": "string", "description": "'waiting', 'active', 'finished'" },
+        { "name": "drawnNumbers", "type": "array" }
+      ],
+      "subcollections": [
+        {
+          "name": "players",
+          "description": "Players in the room",
+          "documentId": "uid",
+          "fields": [
+            { "name": "name", "type": "string" },
+            { "name": "card", "type": "map" }
+          ]
+        },
+        {
+          "name": "messages",
+          "description": "Chat messages in the room",
+          "documentId": "messageId",
+          "fields": [
+            { "name": "senderId", "type": "string" },
+            { "name": "senderName", "type": "string" },
+            { "name": "text", "type": "string" },
+            { "name": "timestamp", "type": "number" }
+          ]
+        }
+      ]
+    }
+  ]
+}
