@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { BingoCardData, BingoSpace, Message, GameMode } from '../types';
-import { User, Settings, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX } from 'lucide-react';
+import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { audioController } from '../audioUtils';
+import { toast } from 'react-hot-toast';
 
 interface PlayerMobileViewProps {
   card: BingoCardData;
@@ -16,11 +17,15 @@ interface PlayerMobileViewProps {
   participants: { uid: string; name: string; avatar?: string }[];
   prize?: number;
   bgMusicUrl?: string;
+  onlineRadioUrl?: string;
   initialSoundEnabled?: boolean;
+  isSpectator?: boolean;
   onMarkSpace?: (row: number, col: number) => void;
   onExit?: () => void;
   onSendMessage: (text: string) => void;
   onOpenProfile?: () => void;
+  winners?: { uid: string; name: string; avatar?: string }[];
+  roomStatus?: 'waiting' | 'active' | 'finished';
 }
 
 const COLUMN_COLORS = [
@@ -52,7 +57,7 @@ const formatTime = (seconds: number) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, initialSoundEnabled = true, onExit, onSendMessage, onOpenProfile }: PlayerMobileViewProps) {
+export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus }: PlayerMobileViewProps) {
   // We'll mimic the "marked" state based on drawnNumbers for now, but a real app would let user tap.
   // Actually, standard digital bingo auto-daubs or user daubs. Let's make it auto-daub for simplicity,
   // or track clicked spaces. Let's track clicked spaces.
@@ -65,19 +70,174 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   const [localTimeLeft, setLocalTimeLeft] = useState(initialTimeLeft);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
+  // Voice Chat States
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [myAudioStream, setMyAudioStream] = useState<MediaStream | null>(null);
+  const [isMyselfSpeaking, setIsMyselfSpeaking] = useState(false);
+  const [voiceVolume, setVoiceVolume] = useState(0);
+  const [connectedVoicePlayers, setConnectedVoicePlayers] = useState<Set<string>>(new Set());
+  const [speakersState, setSpeakersState] = useState<Record<string, { isSpeaking: boolean; volume: number }>>({});
+
+  useEffect(() => {
+    return () => {
+      // Cleanup voice tracks on unmount
+      if (myAudioStream) {
+        myAudioStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [myAudioStream]);
+
+  const toggleVoiceChat = async () => {
+    if (isSpectator) {
+      toast.error('Espectadores não participam do canal de voz principal.');
+      return;
+    }
+    if (voiceActive) {
+      if (myAudioStream) {
+        myAudioStream.getTracks().forEach(track => track.stop());
+        setMyAudioStream(null);
+      }
+      setIsMyselfSpeaking(false);
+      setVoiceVolume(0);
+      setVoiceActive(false);
+      setConnectedVoicePlayers(new Set());
+      setSpeakersState({});
+      toast.success('Chat de voz desativado.');
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setMyAudioStream(stream);
+        setVoiceActive(true);
+        toast.success('Conectado ao canal de voz da sala!');
+        
+        // Setup simple simulated speakers list to make it dynamic and fun
+        // Connect some of the participants to voice
+        if (participants.length > 0) {
+          const joinedIds = new Set<string>();
+          participants.forEach((p, index) => {
+            if (index < 4) joinedIds.add(p.uid); // first 4 connect
+          });
+          setConnectedVoicePlayers(joinedIds);
+        }
+
+        // Setup real AudioContext analyzer for local speaker volume feedback
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const ctx = new AudioContextClass();
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 64;
+            source.connect(analyser);
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            const pollMic = () => {
+              if (!stream.active) {
+                ctx.close();
+                return;
+              }
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+              }
+              const avg = sum / dataArray.length;
+              setVoiceVolume(avg);
+              setIsMyselfSpeaking(avg > 12);
+              
+              if (stream.active) {
+                requestAnimationFrame(pollMic);
+              } else {
+                ctx.close();
+              }
+            };
+            pollMic();
+          }
+        } catch (audioErr) {
+          console.error("Audio analyser failed:", audioErr);
+        }
+      } catch (err) {
+        console.error(err);
+        toast.error('Privilégios de microfone negados ou indisponíveis.');
+        setVoiceActive(false);
+      }
+    }
+  };
+
+  // Simulate other voice-connected players speaking occasionally to make it dynamic
+  useEffect(() => {
+    if (!voiceActive) return;
+    
+    const interval = setInterval(() => {
+      const activeState: Record<string, { isSpeaking: boolean; volume: number }> = {};
+      connectedVoicePlayers.forEach(uid => {
+        // 30% chance for other voice-connected players to speak
+        const isSpeaking = Math.random() < 0.35;
+        activeState[uid] = {
+          isSpeaking,
+          volume: isSpeaking ? Math.floor(Math.random() * 80) + 20 : 0
+        };
+      });
+      setSpeakersState(activeState);
+    }, 1800);
+    
+    return () => clearInterval(interval);
+  }, [voiceActive, connectedVoicePlayers]);
+
   const customAudioRef = useRef<HTMLAudioElement | null>(null);
+  const radioAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [isRadioPlaying, setIsRadioPlaying] = useState(!!onlineRadioUrl);
+
+  const toggleRadio = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onlineRadioUrl) return;
+
+    if (isRadioPlaying) {
+      if (radioAudioRef.current) radioAudioRef.current.pause();
+      setIsRadioPlaying(false);
+      
+      if (soundEnabled) {
+        if (bgMusicUrl && customAudioRef.current) {
+          customAudioRef.current.play().catch(err => console.log('BGM Play Error:', err));
+        } else {
+          audioController.playBackgroundMusic();
+        }
+      }
+    } else {
+      if (bgMusicUrl && customAudioRef.current) {
+        customAudioRef.current.pause();
+      } else {
+        audioController.stopBackgroundMusic();
+      }
+
+      setIsRadioPlaying(true);
+      setTimeout(() => {
+        if (radioAudioRef.current) {
+          radioAudioRef.current.play().catch(err => {
+            console.log("Radio play error:", err);
+            toast.error("Impossível reproduzir streaming no momento.");
+            setIsRadioPlaying(false);
+          });
+        }
+      }, 100);
+    }
+  };
 
   const unlockAudio = () => {
     if (audioUnlocked) return;
     setAudioUnlocked(true);
-    // Initialize Web Audio API on first interaction
     audioController.init();
     
     if (soundEnabled) {
-      if (bgMusicUrl && customAudioRef.current) {
+      if (isRadioPlaying && onlineRadioUrl) {
+        if (radioAudioRef.current) {
+          radioAudioRef.current.play().catch(e => console.log('Radio auto-play on touch error:', e));
+        }
+      } else if (bgMusicUrl && customAudioRef.current) {
          customAudioRef.current.play().catch(e => console.log('Audio error:', e));
       } else {
          audioController.playBackgroundMusic();
@@ -90,10 +250,16 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     if (soundEnabled) {
       if (bgMusicUrl && customAudioRef.current) customAudioRef.current.pause();
       else audioController.stopBackgroundMusic();
+      if (radioAudioRef.current) radioAudioRef.current.pause();
+      setIsRadioPlaying(false);
       setSoundEnabled(false);
     } else {
-      if (bgMusicUrl && customAudioRef.current) customAudioRef.current.play().catch(e => console.log(e));
-      else audioController.playBackgroundMusic();
+      if (isRadioPlaying && onlineRadioUrl) {
+         if (radioAudioRef.current) radioAudioRef.current.play().catch(e => console.log(e));
+      } else {
+         if (bgMusicUrl && customAudioRef.current) customAudioRef.current.play().catch(e => console.log(e));
+         else audioController.playBackgroundMusic();
+      }
       setSoundEnabled(true);
     }
   };
@@ -102,8 +268,47 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     return () => {
        audioController.stopBackgroundMusic();
        if (customAudioRef.current) customAudioRef.current.pause();
+       if (radioAudioRef.current) radioAudioRef.current.pause();
     };
   }, []);
+
+  // auto play background music / online radio immediately on mount
+  useEffect(() => {
+    if (soundEnabled) {
+      const runPlay = async () => {
+        try {
+          audioController.init();
+          setAudioUnlocked(true);
+          if (onlineRadioUrl) {
+            // wait briefly for ref to resolve
+            setTimeout(() => {
+              if (radioAudioRef.current) {
+                radioAudioRef.current.play().then(() => {
+                  setIsRadioPlaying(true);
+                }).catch(e => {
+                  console.log("Radio auto-play wait for user gesture:", e);
+                });
+              }
+            }, 100);
+          } else if (bgMusicUrl) {
+            // wait briefly for ref to resolve
+            setTimeout(() => {
+              if (customAudioRef.current) {
+                customAudioRef.current.play().catch(e => {
+                  console.log("Auto-play wait for user gesture:", e);
+                });
+              }
+            }, 100);
+          } else {
+            audioController.playBackgroundMusic();
+          }
+        } catch (e) {
+          console.log(e);
+        }
+      };
+      runPlay();
+    }
+  }, [bgMusicUrl, onlineRadioUrl, soundEnabled]);
 
   // Efeito sonoro a cada nova bola sorteada
   useEffect(() => {
@@ -130,6 +335,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   }, [scheduledTime]);
 
   useEffect(() => {
+    if (isSpectator) return;
     // Check for BINGO condition
     let won = false;
     
@@ -225,6 +431,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   };
 
   const handleSpaceClick = (rIdx: number, cIdx: number, value: BingoSpace) => {
+    if (isSpectator) return;
     if (value === 'FREE') return;
     const key = `${rIdx}-${cIdx}`;
     setMarkedSpaces(prev => {
@@ -246,12 +453,15 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   };
 
   // The latest drawn numbers
-  const recentDrawn = [...drawnNumbers].reverse().slice(0, 5);
+  const recentDrawn = [...drawnNumbers].reverse().slice(0, 3);
 
   return (
     <div className="min-h-screen bg-emerald-500 font-sans text-slate-800 flex flex-col justify-start pb-8 relative overflow-hidden" onClick={unlockAudio} onTouchStart={unlockAudio}>
       {bgMusicUrl && (
          <audio ref={customAudioRef} src={bgMusicUrl} loop preload="auto" />
+      )}
+      {onlineRadioUrl && (
+         <audio ref={radioAudioRef} src={onlineRadioUrl} preload="auto" />
       )}
       {/* Background Decor (Simulating the grassy field & sky from image) */}
       <div className="absolute inset-0 pointer-events-none z-0">
@@ -261,68 +471,225 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       </div>
 
       <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-full">
-        {/* Top Header */}
-        <div className="flex items-center justify-between py-4">
-          <div 
-            onClick={(e) => { e.stopPropagation(); onOpenProfile && onOpenProfile(); }}
-            className="bg-emerald-600/80 rounded-full pl-1 pr-4 py-1 flex items-center gap-2 border border-emerald-400 backdrop-blur-sm cursor-pointer hover:bg-emerald-600 transition-colors"
-          >
-            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center overflow-hidden border-2 border-emerald-300">
-               {user.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/> : <User className="w-6 h-6 text-slate-400" />}
+        {/* Top Unified Premium Header Card incorporating all circled top elements */}
+        <div className="bg-white/95 dark:bg-slate-900 border border-emerald-400/30 dark:border-slate-800 rounded-3xl p-4 shadow-xl flex flex-col gap-4 w-full mb-6 z-10 transition-all duration-300" onClick={(e) => e.stopPropagation()}>
+          
+          {/* Row 1: Profile and Action Controls */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+            {/* Left side: profile details + Toggle Button */}
+            <div className="flex items-center justify-between w-full md:w-auto gap-3">
+              <div 
+                onClick={(e) => { e.stopPropagation(); onOpenProfile && onOpenProfile(); }}
+                className="flex items-center gap-3 cursor-pointer hover:bg-emerald-50 dark:hover:bg-slate-800/60 p-1.5 rounded-2xl transition-all text-left"
+              >
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border border-emerald-200 dark:border-slate-700 relative shrink-0">
+                   {user.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/> : <User className="w-6 h-6 text-slate-400" />}
+                   {voiceActive && isMyselfSpeaking && (
+                     <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center border-2 border-green-500 rounded-full">
+                       <span className="flex gap-0.5 justify-center items-center">
+                         <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                         <span className="w-1 h-4 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                         <span className="w-1 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                       </span>
+                     </div>
+                   )}
+                </div>
+                <div>
+                   <div className="text-slate-800 dark:text-slate-100 text-sm md:text-base font-black leading-tight tracking-tight">{user.name}</div>
+                   <div className="flex items-center gap-1.5 mt-0.5">
+                     <Coins className="w-4 h-4 text-amber-500 fill-amber-305 shrink-0" />
+                     <span className="text-amber-600 dark:text-amber-400 text-xs md:text-sm font-black">{user.coins.toLocaleString()}</span>
+                   </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Countdown Clock (Always Visible) */}
+                <div className="bg-emerald-50 dark:bg-slate-850 border border-emerald-200/50 dark:border-slate-750 rounded-xl px-2.5 h-10 flex items-center gap-1 shadow-sm shrink-0">
+                   <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                   <span className="text-emerald-700 dark:text-emerald-300 font-extrabold text-xs tracking-wider">{formatTime(localTimeLeft)}</span>
+                </div>
+
+                {/* Icon toggle button */}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsHeaderExpanded(!isHeaderExpanded); }}
+                  className="p-2 rounded-xl text-slate-500 hover:text-indigo-650 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 active:scale-95"
+                  title={isHeaderExpanded ? "Ocultar detalhes" : "Mostrar detalhes"}
+                >
+                  {isHeaderExpanded ? <EyeOff className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Eye className="w-5 h-5 text-emerald-605 dark:text-emerald-400" />}
+                </button>
+              </div>
             </div>
-            <div>
-               <div className="text-white text-xs font-bold leading-tight">{user.name}</div>
-               <div className="flex items-center gap-1">
-                 <Coins className="w-3 h-3 text-amber-300 fill-amber-300" />
-                 <span className="text-emerald-100 text-[10px] font-black">{user.coins.toLocaleString()}</span>
-               </div>
-            </div>
+
+            {/* Right side: game controls row */}
+            {isHeaderExpanded && (
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+                {/* Online Radio Button Play/Pause Toggle */}
+                {onlineRadioUrl && (
+                  <button 
+                    onClick={toggleRadio} 
+                    title={isRadioPlaying ? "Pausar rádio online" : "Escutar rádio online"}
+                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                      isRadioPlaying 
+                        ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse shadow-indigo-600/10' 
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                    }`}
+                  >
+                    <Radio className={`w-4 h-4 ${isRadioPlaying ? 'text-indigo-200 animate-spin-slow' : 'text-slate-400 dark:text-slate-505'}`} />
+                  </button>
+                )}
+
+                {/* Real Voice Chat Button */}
+                <button 
+                  onClick={toggleVoiceChat} 
+                  title={voiceActive ? "Desativar Canal de Voz" : "Ativar Canal de Voz"}
+                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                    voiceActive 
+                      ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse' 
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                  }`}
+                >
+                  {voiceActive ? <Mic className="w-4 h-4 text-emerald-300" /> : <MicOff className="w-4 h-4 text-slate-400 dark:text-slate-505" />}
+                </button>
+
+                {/* Sound Controls */}
+                <button 
+                  onClick={toggleSound} 
+                  title="Áudio do Jogo"
+                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-505 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
+                >
+                  {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                </button>
+
+                {/* Auto Daub Button */}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setAutoDaub(!autoDaub); }} 
+                  title="Marcação Automática"
+                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                    autoDaub 
+                      ? 'bg-indigo-600 border-indigo-400/30 text-white' 
+                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-705 hover:bg-slate-100'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
+
+                {/* Exit Button */}
+                <button onClick={onExit} className="w-10 h-10 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-655 dark:text-red-400 flex items-center justify-center border border-red-100 dark:border-red-900 active:scale-95 transition-all shadow-sm" title="Sair do Jogo">
+                   <ArrowLeft className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-2">
-            <button 
-              onClick={toggleSound} 
-              title="Áudio"
-              className={`h-10 w-10 flex items-center justify-center rounded-full border transition-colors ${soundEnabled ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-white text-emerald-700 border-white'}`}
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); setAutoDaub(!autoDaub); }} 
-              title="Marcação Automática"
-              className={`h-10 px-3 rounded-full flex items-center gap-1.5 text-xs font-bold border transition-colors ${autoDaub ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-white text-emerald-700 border-white'}`}
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Auto</span>
-            </button>
-            <div className="bg-emerald-600/80 rounded-full px-3 h-10 border border-emerald-400 flex items-center gap-1.5 backdrop-blur-sm">
-               <Clock className="w-4 h-4 text-emerald-200" />
-               <span className="text-white font-bold text-sm tracking-widest">{formatTime(localTimeLeft)}</span>
+          {/* Elegant Slate Divider Line with high contrast */}
+          {isHeaderExpanded && (
+            <div className="h-px bg-slate-100 dark:bg-slate-800/80 w-full animate-none" />
+          )}
+
+          {/* Row 2: Participants list and Live Info Badges */}
+          {isHeaderExpanded && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+              {/* Left Part: Participants list miniatures */}
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 w-full sm:max-w-[70%]">
+                 <div className="flex -space-x-1.5 shrink-0">
+                   {participants.map((p, idx) => {
+                     const isSpeaking = speakersState[p.uid]?.isSpeaking && voiceActive;
+                     const isVoiceUser = connectedVoicePlayers.has(p.uid) && voiceActive;
+                     return (
+                       <div 
+                         key={p.uid} 
+                         className={`w-8 h-8 rounded-full border-2 bg-white dark:bg-slate-850 overflow-hidden shadow-sm flex-shrink-0 transition-all duration-200 relative ${
+                           isSpeaking 
+                             ? 'border-green-500 scale-110 ring-2 ring-green-400/40 z-10' 
+                             : (isVoiceUser ? 'border-indigo-400' : 'border-emerald-400 dark:border-emerald-600')
+                         }`} 
+                         title={`${p.name} ${isVoiceUser ? '(Canal de Voz)' : ''}`}
+                       >
+                         {p.avatar ? (
+                           <img src={p.avatar} alt={p.name} className="w-full h-full object-cover"/>
+                         ) : (
+                           <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold text-xs uppercase">
+                             {p.name.charAt(0)}
+                           </div>
+                         )}
+                         {/* Dynamic Voice Wave Animation Overlay */}
+                         {isSpeaking && (
+                           <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                             <span className="flex gap-0.5 justify-center items-center">
+                               <span className="w-0.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                               <span className="w-0.5 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '100ms' }} />
+                               <span className="w-0.5 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
+                             </span>
+                           </div>
+                         )}
+                       </div>
+                     );
+                   })}
+                 </div>
+                 {participants.length === 0 && (
+                   <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold">Nenhum participante ativo</span>
+                 )}
+              </div>
+
+              {/* Right Part: Dynamic Status Badges (Balls drawn & Online count) */}
+              <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                {drawnNumbers.length > 0 && (
+                  <div className="bg-emerald-50 dark:bg-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wide uppercase text-emerald-855 dark:text-emerald-305 border border-emerald-250/20 dark:border-slate-800/80 shadow-sm flex items-center gap-1.5 transition-colors">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    Bolas Sorteadas: <span className="text-emerald-600 dark:text-emerald-400 font-black">{drawnNumbers.length}</span> / 75
+                  </div>
+                )}
+
+                <div className="text-[10px] font-black uppercase text-emerald-850 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200/20 dark:border-emerald-900/30 flex items-center gap-1.5 shadow-sm">
+                  {voiceActive && (
+                    <span className="flex h-1.5 w-1.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-405 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                    </span>
+                  )}
+                  {participants.length + 1} online
+                </div>
+              </div>
             </div>
-            <button onClick={onExit} className="w-10 h-10 rounded-full bg-white text-emerald-600 flex items-center justify-center shadow-md active:scale-95 transition-transform">
-               <ArrowLeft className="w-6 h-6" />
-            </button>
-          </div>
+          )}
         </div>
 
-        {/* Drawn Balls Header */}
-        <div className="flex items-center gap-2 mb-6 h-20 px-2 justify-center">
-           <AnimatePresence>
+        {/* Drawn Balls Animation Stage */}
+        <div className="flex flex-col items-center mb-6">
+          <div className="flex items-center gap-1 h-24 sm:h-28 px-2 justify-center w-full">
+            <AnimatePresence>
              {recentDrawn.map((num, i) => (
                 <motion.div
                   key={`${num}-${i}`}
                   initial={i === 0 ? { scale: 0, x: -50, opacity: 0 } : { x: -20, opacity: 0 }}
-                  animate={{ scale: i === 0 ? 1 : 0.8, x: 0, opacity: i === 0 ? 1 : 0.9 }}
+                  animate={i === 0 ? { 
+                    scale: [1, 1.15, 1],
+                    borderColor: ['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.5)'],
+                    boxShadow: [
+                      '0 0 0 0 rgba(255, 255, 255, 0.4), inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)',
+                      '0 0 0 12px rgba(255, 255, 255, 0), inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)',
+                      '0 0 0 0 rgba(255, 255, 255, 0), inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)'
+                    ]
+                  } : { scale: 0.8, x: 0, opacity: 0.9 }}
+                  transition={i === 0 ? {
+                    scale: { repeat: Infinity, duration: 1.5, ease: "easeInOut" },
+                    borderColor: { repeat: Infinity, duration: 1.5, ease: "easeInOut" },
+                    boxShadow: { repeat: Infinity, duration: 1.5, ease: "easeInOut" }
+                  } : { duration: 0.3 }}
                   className={`rounded-full flex items-center justify-center font-black shadow-lg shadow-black/20 ${getColumnColor(num)} ${
                     i === 0 
-                      ? 'w-16 h-16 text-3xl border-4 border-white/50 border-dashed z-10 relative' 
-                      : 'w-12 h-12 text-xl border-2 border-white/30 z-0'
+                      ? 'w-20 h-20 text-4xl sm:w-24 sm:h-24 sm:text-5xl border-4 border-white/50 border-dashed z-10 relative animate-pulse' 
+                      : 'w-14 h-14 text-2xl sm:w-16 sm:h-16 sm:text-3xl border-2 border-white/30 z-0'
                   }`}
                   style={{
                     boxShadow: 'inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)',
                   }}
                 >
                   <span className="drop-shadow-sm">{num}</span>
+                  {i === 0 && (
+                    <span className="absolute -inset-1.5 rounded-full border-4 border-white/40 animate-ping pointer-events-none" />
+                  )}
                 </motion.div>
              ))}
            </AnimatePresence>
@@ -330,6 +697,18 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
               <div className="text-emerald-100/50 font-bold tracking-widest uppercase text-sm mt-4">Nenhuma bola sorteada</div>
            )}
         </div>
+      </div>
+
+        {/* Spectator Warning Banner */}
+        {isSpectator && (
+          <div className="bg-indigo-600 border border-indigo-500 text-white px-5 py-3 rounded-2xl mb-4 max-w-[500px] w-full mx-auto flex items-center justify-between text-xs font-black tracking-wide shadow-md uppercase animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+              Modo Espectador Ativo
+            </div>
+            <div className="text-[10px] text-indigo-200">Apenas assistindo</div>
+          </div>
+        )}
 
         {/* Bingo Card Container */}
         <div className="bg-emerald-300 rounded-3xl p-3 shadow-2xl shadow-emerald-900/40 border-4 border-emerald-400 relative max-w-[500px] w-full mx-auto">
@@ -357,8 +736,9 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                  return (
                    <button
                      key={`${rIdx}-${cIdx}`}
-                     onClick={() => !isFree && handleSpaceClick(rIdx, cIdx, cell)}
-                     className={`aspect-square rounded-xl shadow-sm flex items-center justify-center font-black transition-all active:scale-95 border-b-4 ${bgClass} ${textClass} ${isMarked ? 'border-emerald-300/50' : 'border-slate-200'}`}
+                     onClick={() => !isSpectator && !isFree && handleSpaceClick(rIdx, cIdx, cell)}
+                     disabled={isSpectator}
+                     className={`aspect-square rounded-xl shadow-sm flex items-center justify-center font-black transition-all border-b-4 ${bgClass} ${textClass} ${isMarked ? 'border-emerald-300/50' : 'border-slate-200'} ${isSpectator ? 'cursor-not-allowed opacity-90' : 'active:scale-95'}`}
                    >
                      {isFree ? (
                        <Star className="w-8 h-8 fill-yellow-300 text-yellow-500 drop-shadow-sm" />
@@ -374,28 +754,6 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
 
         {/* Chat Section & Participants */}
         <div className="mt-4 flex-1 flex flex-col justify-end relative z-20 w-full max-w-[500px] mx-auto mb-16">
-           <div className="flex justify-center items-center gap-2 mb-2">
-             <div className="flex -space-x-2">
-               {participants.slice(0, 5).map((p, idx) => (
-                 <div key={p.uid} className="w-8 h-8 rounded-full border-2 border-emerald-400 bg-white overflow-hidden" title={p.name}>
-                   {p.avatar ? (
-                     <img src={p.avatar} alt={p.name} className="w-full h-full object-cover"/>
-                   ) : (
-                     <User className="w-full h-full text-slate-400 p-1" />
-                   )}
-                 </div>
-               ))}
-             </div>
-             {participants.length > 5 && (
-               <div className="w-8 h-8 rounded-full border-2 border-emerald-400 bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center justify-center z-10 shadow-sm">
-                 +{participants.length - 5}
-               </div>
-             )}
-             <div className="text-emerald-100 text-xs font-bold bg-emerald-800/40 px-2 py-1 rounded-lg backdrop-blur-sm ml-1">
-               {participants.length} online
-             </div>
-           </div>
-
            <button 
              onClick={() => setIsChatOpen(!isChatOpen)}
              className="mx-auto w-full max-w-[200px] bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-t-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors border-t border-x border-emerald-400"
@@ -441,12 +799,13 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                       type="text" 
                       value={chatMessage}
                       onChange={e => setChatMessage(e.target.value)}
-                      placeholder="Mensagem..."
+                      placeholder={isSpectator ? "Apenas jogadores podem usar o chat" : "Mensagem..."}
+                      disabled={isSpectator}
                       className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                     />
                     <button 
                       type="submit" 
-                      disabled={!chatMessage.trim()}
+                      disabled={isSpectator || !chatMessage.trim()}
                       className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-colors active:scale-95"
                     >
                       <Send className="w-5 h-5"/>

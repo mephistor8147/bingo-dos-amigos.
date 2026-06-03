@@ -41,6 +41,7 @@ export interface Room {
   gameMode?: GameMode;
   prize?: number;
   bgMusicUrl?: string;
+  onlineRadioUrl?: string;
 }
 
 export interface User {
@@ -62,5 +63,6 @@ export interface AppState {
   settings?: {
     notificationsEnabled: boolean;
     soundEnabled: boolean;
+    darkMode?: boolean;
   };
 }

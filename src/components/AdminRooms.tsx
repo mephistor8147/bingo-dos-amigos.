@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Room } from '../types';
-import { Plus, Users, Clock, Coins, Play, Trophy } from 'lucide-react';
+import { Plus, Users, Clock, Coins, Play, Trophy, Radio } from 'lucide-react';
 
 interface AdminRoomsProps {
   rooms: Room[];
@@ -15,6 +15,7 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
   const [fee, setFee] = useState(10);
   const [prize, setPrize] = useState(100);
   const [bgMusicUrl, setBgMusicUrl] = useState('');
+  const [onlineRadioUrl, setOnlineRadioUrl] = useState('');
   const [startTime, setStartTime] = useState(() => {
     const d = new Date(Date.now() + 5 * 60000);
     const z = (n: number) => n.toString().padStart(2, '0');
@@ -31,11 +32,14 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
       entryFee: fee,
       prize,
       bgMusicUrl: bgMusicUrl.trim() || undefined,
+      onlineRadioUrl: onlineRadioUrl.trim() || undefined,
       scheduledTime: new Date(startTime).getTime(),
       maxPlayers: 10,
       gameMode,
     });
     setNewName('');
+    setBgMusicUrl('');
+    setOnlineRadioUrl('');
     setShowCreate(false);
   };
 
@@ -104,6 +108,15 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
                  )}
                </div>
                <div className="md:col-span-2">
+                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Link de Rádio Online (Streaming)</label>
+                 <input 
+                   type="text" 
+                   value={onlineRadioUrl} 
+                   onChange={e => setOnlineRadioUrl(e.target.value)} 
+                   placeholder="URL direta de streaming de rádio (MP3, AAC, m3u8, Icecast)" 
+                   className="w-full bg-slate-50 text-slate-800 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700 mb-4" 
+                 />
+
                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Modo de Jogo</label>
                  <select value={gameMode} onChange={e=>setGameMode(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700">
                    <option value="full_card">Cartela Cheia</option>
@@ -132,6 +145,12 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
                 </div>
                 <div className="text-xs font-bold text-slate-400 mt-1 uppercase">
                   Modo: {room.gameMode === 'full_card' ? 'Cartela Cheia' : room.gameMode === 'line' ? 'Linha' : '4 Cantos'}
+                  {room.onlineRadioUrl && (
+                    <div className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-150/40 text-[10px] font-black uppercase inline-flex items-center gap-1.5 mt-2 shadow-sm w-fit">
+                      <Radio className="w-3.5 h-3.5 animate-pulse text-indigo-505" />
+                      Rádio Online
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col items-end gap-1">

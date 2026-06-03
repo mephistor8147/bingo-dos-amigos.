@@ -74,7 +74,53 @@ export function AdminUsers({ onGoBack }: AdminUsersProps) {
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Mobile view: Card Layout */}
+          <div className="block md:hidden divide-y divide-slate-100">
+            {users.map(user => (
+              <div key={user.uid} className="p-4 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-extrabold text-slate-800">{user.name}</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">{user.email || 'N/A'}</p>
+                  </div>
+                  <span className={`px-2 py-1 rounded-md text-xs font-bold ${user.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-700'}`}>
+                    {user.role === 'admin' ? 'Admin' : 'Jogador'}
+                  </span>
+                </div>
+                
+                <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                  <div className="flex items-center gap-1 font-black text-amber-500 text-sm">
+                    <Coins className="w-4 h-4" />
+                    <span>{user.coins}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      value={editingCoins[user.uid] || ''} 
+                      onChange={(e) => handleCoinsChange(user.uid, e.target.value)}
+                      placeholder="± Valor"
+                      className="w-20 bg-slate-50 border border-slate-205 p-1.5 rounded-lg text-xs outline-none focus:border-amber-500"
+                    />
+                    <button 
+                      onClick={() => handleAddCoins(user.uid, user.coins)}
+                      disabled={!editingCoins[user.uid] || editingCoins[user.uid] === '0'}
+                      className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 p-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Salvar Saldo"
+                    >
+                      <Save className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {users.length === 0 && (
+              <div className="p-8 text-center text-slate-400 font-medium">Nenhum usuário encontrado.</div>
+            )}
+          </div>
+
+          {/* Desktop view: Table Layout */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100 uppercase text-xs font-bold text-slate-500">
