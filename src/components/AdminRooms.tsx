@@ -163,30 +163,30 @@ export function AdminRooms({
       </div>
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 mb-8 space-y-4">
-           <h3 className="text-lg font-bold text-slate-800">Criar Nova Sala</h3>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleCreate} className="bg-white dark:bg-slate-900 p-4 sm:p-6 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 mb-8 space-y-4">
+           <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">Criar Nova Sala</h3>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div>
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nome da Sala</label>
-                 <input type="text" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Ex: Rodada Prêmium" className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold" />
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da Sala</label>
+                 <input type="text" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Ex: Rodada Prêmium" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-slate-100" />
                </div>
                <div>
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora de Início</label>
-                 <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-indigo-600" />
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hora de Início</label>
+                 <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-indigo-600 dark:text-indigo-400" />
                </div>
                <div>
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Taxa de Entrada (Moedas)</label>
-                 <input type="number" min="0" value={fee} onChange={e=>setFee(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-amber-600" />
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Taxa de Entrada (Moedas)</label>
+                 <input type="number" min="0" value={fee} onChange={e=>setFee(Number(e.target.value))} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-amber-600 dark:text-amber-400" />
                </div>
                <div>
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Premiação (Moedas)</label>
-                 <input type="number" min="0" value={prize} onChange={e=>setPrize(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-emerald-600" />
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Premiação (Moedas)</label>
+                 <input type="number" min="0" value={prize} onChange={e=>setPrize(Number(e.target.value))} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-emerald-605 dark:text-emerald-400" />
                </div>
-               <div className="md:col-span-2">
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Música de Fundo (MP3, MIDI)</label>
-                 <div className="flex gap-2">
-                   <input type="text" value={bgMusicUrl} onChange={e=>setBgMusicUrl(e.target.value)} placeholder="URL ou faça upload ->" className="flex-1 bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700" />
-                   <label className="bg-indigo-50 text-indigo-700 cursor-pointer px-4 rounded-xl font-bold hover:bg-indigo-100 flex items-center justify-center whitespace-nowrap transition-colors border border-indigo-200">
+               <div className="sm:col-span-2">
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Música de Fundo (MP3, MIDI)</label>
+                 <div className="flex flex-col sm:flex-row gap-2">
+                   <input type="text" value={bgMusicUrl} onChange={e=>setBgMusicUrl(e.target.value)} placeholder="URL ou faça upload ->" className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-slate-100" />
+                   <label className="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 cursor-pointer p-3 sm:px-4 rounded-xl font-bold flex items-center justify-center whitespace-nowrap transition-colors border border-indigo-200 dark:border-indigo-900/50">
                       <span>Upload Local</span>
                       <input 
                         type="file" 
@@ -207,16 +207,16 @@ export function AdminRooms({
                    </label>
                  </div>
                  {bgMusicUrl.startsWith('data:') && (
-                   <div className="text-xs text-emerald-600 font-bold mt-1">✓ Áudio local carregado: Pronto.</div>
+                   <div className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-1">✓ Áudio local carregado: Pronto.</div>
                  )}
                </div>
-               <div className="md:col-span-2">
+               <div className="sm:col-span-2">
                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-                   <label className="block text-xs font-bold text-slate-500 uppercase">Link de Rádio Online (Streaming)</label>
+                   <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Link de Rádio Online (Streaming)</label>
                    <select
                      onChange={(e) => setOnlineRadioUrl(e.target.value)}
                      value={onlineRadioUrl}
-                     className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 p-1.5 px-3 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer border border-slate-200 dark:border-slate-700"
+                     className="bg-slate-105 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 p-1.5 px-3 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer border border-slate-200 dark:border-slate-700 w-full sm:w-auto"
                    >
                      <option value="">-- Escolher Rádio Preset --</option>
                      <option value="https://live.hunter.fm/sertanejo_stream?ag=mp3">Sertanejo</option>
@@ -239,20 +239,20 @@ export function AdminRooms({
                    value={onlineRadioUrl} 
                    onChange={e => setOnlineRadioUrl(e.target.value)} 
                    placeholder="URL direta de streaming de rádio (MP3, AAC, m3u8, Icecast)" 
-                   className="w-full bg-slate-50 text-slate-800 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700 mb-4" 
+                   className="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold mb-4" 
                  />
-
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Modo de Jogo</label>
-                 <select value={gameMode} onChange={e=>setGameMode(e.target.value as any)} className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-700">
+ 
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Modo de Jogo</label>
+                 <select value={gameMode} onChange={e=>setGameMode(e.target.value as any)} className="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold mb-4">
                    <option value="full_card">Cartela Cheia</option>
                    <option value="line">Linha (Vertical/Horizontal)</option>
                    <option value="block_of_4">4 Números Próximos (Bloco 2x2)</option>
                   </select>
-
+ 
                   <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
-                    <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider mb-2">🤖 Bots na Sala (Até 5)</h4>
+                    <h4 className="font-extrabold text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🤖 Bots na Sala (Até 5)</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <label className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl cursor-pointer hover:bg-slate-105 active:scale-95 transition-all">
+                      <label className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-750 active:scale-95 transition-all">
                         <input 
                           type="checkbox" 
                           checked={botsEnabled} 
@@ -269,7 +269,7 @@ export function AdminRooms({
                           <select 
                             value={maxBots} 
                             onChange={(e) => setMaxBots(Number(e.target.value))} 
-                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs text-slate-700 dark:text-slate-350"
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs text-slate-705 dark:text-slate-300 pointer-events-auto"
                           >
                             <option value="1">1 Bot Ativo</option>
                             <option value="2">2 Bots Ativos</option>
@@ -283,9 +283,9 @@ export function AdminRooms({
                   </div>
                 </div>
               </div>
-            <button type="submit" disabled={!newName.trim()} className="w-full bg-slate-800 hover:bg-slate-900 text-white p-4 rounded-xl font-bold transition-colors disabled:opacity-50">
+            <button type="submit" disabled={!newName.trim()} className="w-full bg-slate-800 hover:bg-slate-900 dark:bg-indigo-600 dark:hover:bg-indigo-700 text-white p-4 rounded-xl font-bold transition-colors disabled:opacity-50 mt-4 active:scale-[0.98]">
              Criar e Agendar
-           </button>
+            </button>
         </form>
       )}
 

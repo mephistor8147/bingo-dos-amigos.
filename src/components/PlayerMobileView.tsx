@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { BingoCardData, BingoSpace, Message, GameMode } from '../types';
-import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles, Trophy } from 'lucide-react';
 import { audioController } from '../audioUtils';
 import { toast } from 'react-hot-toast';
 import { isCardWinner } from '../utils';
@@ -73,8 +73,35 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
-  
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+
+  const [bgVolume, setBgVolume] = useState(() => {
+    try {
+      const saved = localStorage.getItem('bingo_bg_volume');
+      return saved ? Number(saved) : 50; // Default to 50%
+    } catch (e) {
+      return 50;
+    }
+  });
+
+  const handleVolumeChange = (vol: number) => {
+    setBgVolume(vol);
+    try {
+      localStorage.setItem('bingo_bg_volume', vol.toString());
+    } catch (e) {
+      console.error(e);
+    }
+    
+    // Apply immediate volume changes
+    const val = vol / 100;
+    if (customAudioRef.current) {
+      customAudioRef.current.volume = val;
+    }
+    if (radioAudioRef.current) {
+      radioAudioRef.current.volume = val;
+    }
+    audioController.setBackgroundVolume(val);
+  };
 
   // Voice Chat States
   const [voiceActive, setVoiceActive] = useState(false);
@@ -206,7 +233,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
         if (bgMusicUrl && customAudioRef.current) {
           customAudioRef.current.play().catch(err => console.log('BGM Play Error:', err));
         } else {
-          audioController.playBackgroundMusic();
+          audioController.playBackgroundMusic(bgVolume / 100);
         }
       }
     } else {
@@ -242,7 +269,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       } else if (bgMusicUrl && customAudioRef.current) {
          customAudioRef.current.play().catch(e => console.log('Audio error:', e));
       } else {
-         audioController.playBackgroundMusic();
+         audioController.playBackgroundMusic(bgVolume / 100);
       }
     }
   };
@@ -260,7 +287,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
          if (radioAudioRef.current) radioAudioRef.current.play().catch(e => console.log(e));
       } else {
          if (bgMusicUrl && customAudioRef.current) customAudioRef.current.play().catch(e => console.log(e));
-         else audioController.playBackgroundMusic();
+         else audioController.playBackgroundMusic(bgVolume / 100);
       }
       setSoundEnabled(true);
     }
@@ -302,7 +329,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
               }
             }, 100);
           } else {
-            audioController.playBackgroundMusic();
+            audioController.playBackgroundMusic(bgVolume / 100);
           }
         } catch (e) {
           console.log(e);
@@ -310,7 +337,20 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       };
       runPlay();
     }
-  }, [bgMusicUrl, onlineRadioUrl, soundEnabled]);
+  }, [bgMusicUrl, onlineRadioUrl, soundEnabled, bgVolume]);
+
+  // Set initial volumes when audio elements mount or volume changes
+  useEffect(() => {
+    if (customAudioRef.current) {
+      customAudioRef.current.volume = bgVolume / 100;
+    }
+  }, [bgVolume, bgMusicUrl]);
+
+  useEffect(() => {
+    if (radioAudioRef.current) {
+      radioAudioRef.current.volume = bgVolume / 100;
+    }
+  }, [bgVolume, onlineRadioUrl]);
 
   // Efeito sonoro a cada nova bola sorteada
   useEffect(() => {
@@ -558,10 +598,27 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                 <button 
                   onClick={toggleSound} 
                   title="Áudio do Jogo"
-                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-505 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
+                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm shrink-0 ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-505 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
                 >
                   {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 </button>
+
+                {/* Adjustable Volume Slider wrapper */}
+                {soundEnabled && (
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-205 dark:border-slate-700 px-3 h-10 rounded-xl shadow-sm shrink-0">
+                    <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={bgVolume} 
+                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                      className="w-16 sm:w-20 accent-emerald-500 h-1 cursor-pointer bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none" 
+                      title="Volume do Som de Fundo"
+                    />
+                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 w-6 text-right shrink-0">{bgVolume}%</span>
+                  </div>
+                )}
 
                 {/* Auto Daub Button */}
                 <button 
@@ -936,6 +993,96 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                   <p className="mt-6 text-sm font-bold text-slate-400 animate-pulse">Parabéns, prêmio adicionado à sua conta!</p>
                 </div>
              </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Real-time Room Winners Celebration Overlay */}
+        <AnimatePresence>
+          {(playersList || []).filter(p => isCardWinner(p.card, drawnNumbers, gameMode)).length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 text-center overflow-y-auto"
+            >
+              <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-10 left-10 w-40 h-40 bg-amber-500/15 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute bottom-10 right-10 w-40 h-40 bg-zinc-500/15 rounded-full blur-3xl animate-pulse" />
+              </div>
+
+              <motion.div
+                initial={{ scale: 0.85, y: 30 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 1.05, opacity: 0 }}
+                transition={{ type: "spring", damping: 18 }}
+                className="bg-white dark:bg-slate-900 border-4 border-amber-500 rounded-[36px] shadow-[0_0_60px_rgba(245,158,11,0.55)] max-w-sm sm:max-w-md w-full p-6 sm:p-8 flex flex-col items-center relative my-auto scrollbar-none"
+              >
+                {/* Crown / Trophy Floating element */}
+                <div className="absolute -top-12 bg-amber-500 text-white p-4.5 rounded-full border-4 border-white dark:border-slate-900 shadow-xl animate-bounce">
+                  <Trophy className="w-8 h-8 text-white shrink-0 animate-pulse" />
+                </div>
+
+                <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-400 uppercase tracking-widest mt-6 filter drop-shadow">
+                  BINGO!
+                </h2>
+                
+                <p className="text-xs sm:text-sm font-extrabold text-slate-500 dark:text-slate-400 mt-2 uppercase tracking-wide">
+                  Temos Ganhadores na Rodada!
+                </p>
+
+                <div className="mt-6 flex flex-col gap-3 w-full max-h-[40vh] overflow-y-auto scrollbar-none">
+                  {(playersList || []).filter(p => isCardWinner(p.card, drawnNumbers, gameMode)).map((winner) => {
+                    const matchedParticipant = participants.find(part => part.uid === winner.id);
+                    const isMe = winner.id === user.uid;
+                    const avatarUrl = matchedParticipant?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + winner.name;
+                    
+                    return (
+                      <motion.div 
+                        key={winner.id}
+                        initial={{ opacity: 0, x: -15 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-3 bg-slate-50 dark:bg-slate-850/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800"
+                      >
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-400 bg-amber-50 shrink-0 shadow-md">
+                          <img 
+                            referrerPolicy="no-referrer"
+                            src={avatarUrl} 
+                            alt={winner.name} 
+                            className="w-full h-full object-cover" 
+                          />
+                        </div>
+                        <div className="text-left flex-1 min-w-0">
+                          <div className="font-extrabold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-1.5">
+                            <span className="truncate">{winner.name}</span>
+                            {isMe && <span className="bg-emerald-500 text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-md uppercase tracking-wider">Você</span>}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-400">
+                            {winner.id.startsWith('bot_') ? '🤖 Participante Virtual' : '🎯 Jogador Real'}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {prize !== undefined && (
+                            <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-2 py-1 rounded-xl font-black text-xs border border-amber-100 dark:border-amber-900/40">
+                              <Coins className="w-3.5 h-3.5 text-amber-500 fill-amber-300 shrink-0" />
+                              <span>+{Math.floor(prize / (playersList || []).filter(p => isCardWinner(p.card, drawnNumbers, gameMode)).length)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-8 w-full">
+                  <button
+                    onClick={onExit}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-extrabold py-3.5 rounded-2xl text-xs sm:text-sm transition-all shadow-md uppercase tracking-wider"
+                  >
+                    Voltar ao Lobby
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
           )}
         </AnimatePresence>
 

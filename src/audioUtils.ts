@@ -125,14 +125,17 @@ export class AudioController {
     window.speechSynthesis.speak(utterance);
   }
 
-  public playBackgroundMusic() {
+  public playBackgroundMusic(volume = 0.5) {
     if (!this.ctx) this.init();
     if (!this.ctx) return;
     
-    if (this.bgOscillator) return; // Already playing
+    if (this.bgOscillator) {
+      this.setBackgroundVolume(volume);
+      return;
+    }
     
     this.bgGain = this.ctx.createGain();
-    this.bgGain.gain.value = 0.05; // low volume
+    this.bgGain.gain.value = volume * 0.05; // scaled down from full scale
     this.bgGain.connect(this.ctx.destination);
     
     this.bgOscillator = this.ctx.createOscillator();
@@ -151,6 +154,12 @@ export class AudioController {
     lfo.connect(lfoGain);
     lfoGain.connect(this.bgOscillator.frequency);
     lfo.start();
+  }
+
+  public setBackgroundVolume(volume: number) {
+    if (this.bgGain) {
+      this.bgGain.gain.value = volume * 0.05;
+    }
   }
 
   public stopBackgroundMusic() {
