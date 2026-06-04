@@ -211,7 +211,29 @@ export function AdminRooms({
                  )}
                </div>
                <div className="md:col-span-2">
-                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Link de Rádio Online (Streaming)</label>
+                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+                   <label className="block text-xs font-bold text-slate-500 uppercase">Link de Rádio Online (Streaming)</label>
+                   <select
+                     onChange={(e) => setOnlineRadioUrl(e.target.value)}
+                     value={onlineRadioUrl}
+                     className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 p-1.5 px-3 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer border border-slate-200 dark:border-slate-700"
+                   >
+                     <option value="">-- Escolher Rádio Preset --</option>
+                     <option value="https://live.hunter.fm/sertanejo_stream?ag=mp3">Sertanejo</option>
+                     <option value="https://live.hunter.fm/pop_stream?ag=mp3">Pop</option>
+                     <option value="https://live.hunter.fm/pagode_stream?ag=mp3">Pagode</option>
+                     <option value="https://live.hunter.fm/rock_stream?ag=mp3">Rook</option>
+                     <option value="https://live.hunter.fm/master_stream?ag=mp3">Master</option>
+                     <option value="https://live.hunter.fm/mpb_stream?ag=mp3">Mpb</option>
+                     <option value="https://live.hunter.fm/gospel_stream?ag=mp3">Gostei</option>
+                     <option value="https://live.hunter.fm/hitsbrasil_stream?ag=mp3">Hits Brasil</option>
+                     <option value="https://live.hunter.fm/pop2k_stream?ag=mp3">Pop 2k</option>
+                     <option value="https://live.hunter.fm/modasertaneja_stream?ag=mp3">Moda sertaneja</option>
+                     <option value="https://live.hunter.fm/80s_stream?ag=mp3">80s</option>
+                     <option value="https://live.hunter.fm/kpop_stream?ag=mp3">Kpop</option>
+                     <option value="https://live.hunter.fm/pisadinha_stream?ag=mp3">Pisadinha</option>
+                   </select>
+                 </div>
                  <input 
                    type="text" 
                    value={onlineRadioUrl} 
