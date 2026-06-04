@@ -42,6 +42,9 @@ export interface Room {
   prize?: number;
   bgMusicUrl?: string;
   onlineRadioUrl?: string;
+  botsEnabled?: boolean;
+  maxBots?: number;
+  isAutoCreated?: boolean;
 }
 
 export interface User {

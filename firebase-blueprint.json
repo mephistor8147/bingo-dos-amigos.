@@ -59,7 +59,9 @@
       "documentId": "settingId",
       "fields": [
         { "name": "enabled", "type": "boolean" },
-        { "name": "intervalMinutes", "type": "number" }
+        { "name": "intervalMinutes", "type": "number" },
+        { "name": "startHour", "type": "string" },
+        { "name": "endHour", "type": "string" }
       ]
     }
   ]

@@ -136,24 +136,58 @@ export default function App() {
     }));
   };
 
-  const handleCreateRoom = (partialRoom: Partial<Room>) => {
-    const newRoom: Room = {
-      id: Math.random().toString(36).substring(2, 9),
-      name: partialRoom.name!,
-      entryFee: partialRoom.entryFee!,
-      scheduledTime: partialRoom.scheduledTime!,
-      maxPlayers: partialRoom.maxPlayers!,
-      status: 'waiting',
-      drawnNumbers: [],
-      players: [],
-      messages: [],
-      gameMode: partialRoom.gameMode,
-      prize: partialRoom.prize,
-      bgMusicUrl: partialRoom.bgMusicUrl,
-      onlineRadioUrl: partialRoom.onlineRadioUrl
-    };
-    setAppState(prev => ({ ...prev, rooms: [...prev.rooms, newRoom] }));
-    toast.success('Sala criada com sucesso!');
+  const handleCreateRoom = async (partialRoom: Partial<Room & { botsEnabled?: boolean; maxBots?: number }>) => {
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+
+      const newRoomId = Math.random().toString(36).substring(2, 9);
+      const roomPayload = {
+        name: partialRoom.name!,
+        entryFee: partialRoom.entryFee!,
+        prize: partialRoom.prize ?? 100,
+        scheduledTime: partialRoom.scheduledTime!,
+        maxPlayers: partialRoom.maxPlayers || 10,
+        status: 'waiting',
+        drawnNumbers: [],
+        gameMode: partialRoom.gameMode || 'full_card',
+        bgMusicUrl: partialRoom.bgMusicUrl || null,
+        onlineRadioUrl: partialRoom.onlineRadioUrl || null,
+        botsEnabled: partialRoom.botsEnabled || false,
+        maxBots: partialRoom.maxBots || 0,
+        isAutoCreated: false
+      };
+
+      await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+
+      // Create bots inside subcollection players if bots are enabled
+      if (partialRoom.botsEnabled && partialRoom.maxBots && partialRoom.maxBots > 0) {
+        const botNames = [
+          "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
+          "Bot Lucas", "Bot Julia", "Bot Marcos", "Bot Fernanda", "Bot Felipe"
+        ];
+        const shuffled = [...botNames].sort(() => 0.5 - Math.random());
+        const count = Math.min(partialRoom.maxBots, shuffled.length);
+
+        for (let i = 0; i < count; i++) {
+          const botId = `bot_manual_${Math.random().toString(36).substring(2, 9)}`;
+          const botCard = generateBingoCard(botId, shuffled[i]);
+          await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
+            name: shuffled[i],
+            card: {
+              id: botCard.id,
+              playerName: botCard.playerName,
+              grid: serializeGrid(botCard.grid)
+            }
+          });
+        }
+      }
+
+      toast.success('Sala criada com sucesso!');
+    } catch (e) {
+      console.error("Error creating room:", e);
+      toast.error('Ocorreu um erro ao criar a sala.');
+    }
   };
 
   const handleJoinRoom = async (roomId: string, card: BingoCardData) => {
@@ -205,18 +239,37 @@ export default function App() {
     }
   };
 
-  const handleDrawNumberAdmin = (roomId: string, num: number) => {
-    setAppState(prev => ({
-      ...prev,
-      rooms: prev.rooms.map(r => r.id === roomId ? { ...r, drawnNumbers: [...r.drawnNumbers, num] } : r)
-    }));
+  const handleDrawNumberAdmin = async (roomId: string, num: number) => {
+    try {
+      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      
+      const roomRef = doc(db, 'rooms', roomId);
+      const snap = await getDoc(roomRef);
+      if (snap.exists()) {
+        const currentDrawn = snap.data().drawnNumbers || [];
+        if (!currentDrawn.includes(num)) {
+          const nextDrawn = [...currentDrawn, num];
+          await updateDoc(roomRef, { drawnNumbers: nextDrawn });
+        }
+      }
+    } catch (e) {
+      console.error("Error drawing number in Firestore:", e);
+    }
   };
   
-  const handleResetGameAdmin = (roomId: string) => {
-    setAppState(prev => ({
-      ...prev,
-      rooms: prev.rooms.map(r => r.id === roomId ? { ...r, drawnNumbers: [] } : r)
-    }));
+  const handleResetGameAdmin = async (roomId: string) => {
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await updateDoc(doc(db, 'rooms', roomId), { 
+        drawnNumbers: [],
+        status: 'waiting'
+      });
+      toast.success('Jogo reiniciado!');
+    } catch (e) {
+      console.error("Error resetting room in Firestore:", e);
+    }
   };
 
   const handleDeleteRoom = async (roomId: string) => {
@@ -232,6 +285,78 @@ export default function App() {
       rooms: prev.rooms.filter(r => r.id !== roomId)
     }));
     toast.success('Sala excluída.');
+  };
+
+  const handleUpdateRoomSettings = async (roomId: string, name: string, botsEnabled: boolean, maxBots: number) => {
+    try {
+      const { doc, getDocs, setDoc, deleteDoc, updateDoc, collection } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+
+      // 1. Atualizar documento principal de sala
+      const roomRef = doc(db, 'rooms', roomId);
+      await updateDoc(roomRef, {
+        name,
+        botsEnabled,
+        maxBots: botsEnabled ? maxBots : 0
+      });
+
+      // 2. Ajustar quantidade e dados de bots na subcoleção de jogadores da sala
+      const playersCol = collection(db, 'rooms', roomId, 'players');
+      const playersSnap = await getDocs(playersCol);
+      
+      const botPlayersList: Array<{ id: string; name: string }> = [];
+      playersSnap.forEach(pDoc => {
+        if (pDoc.id.startsWith('bot_')) {
+          botPlayersList.push({ id: pDoc.id, name: pDoc.data().name });
+        }
+      });
+
+      if (!botsEnabled || maxBots <= 0) {
+        // Remover todos os bots da subcoleção se desativados
+        for (const bot of botPlayersList) {
+          await deleteDoc(doc(db, 'rooms', roomId, 'players', bot.id));
+        }
+      } else {
+        const currentCount = botPlayersList.length;
+        if (currentCount < maxBots) {
+          // Acrescentar novos bots necessários
+          const botNames = [
+            "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
+            "Bot Lucas", "Bot Julia", "Bot Marcos", "Bot Fernanda", "Bot Felipe",
+            "Bot Gustavo", "Bot Marina"
+          ];
+          const existingNames = botPlayersList.map(b => b.name);
+          const availableNames = botNames.filter(n => !existingNames.includes(n));
+          
+          const needToAdd = maxBots - currentCount;
+          for (let i = 0; i < needToAdd; i++) {
+            const nameToUse = availableNames[i % availableNames.length] || `Bot Extra ${Math.floor(Math.random() * 1000)}`;
+            const botId = `bot_${Math.random().toString(36).substring(2, 9)}`;
+            const botCard = generateBingoCard(botId, nameToUse);
+            
+            await setDoc(doc(db, 'rooms', roomId, 'players', botId), {
+              name: nameToUse,
+              card: {
+                id: botCard.id,
+                playerName: botCard.playerName,
+                grid: serializeGrid(botCard.grid)
+              }
+            });
+          }
+        } else if (currentCount > maxBots) {
+          // Remover bots excessivos se reduzido
+          const diff = currentCount - maxBots;
+          for (let i = 0; i < diff; i++) {
+            await deleteDoc(doc(db, 'rooms', roomId, 'players', botPlayersList[i].id));
+          }
+        }
+      }
+
+      toast.success('Configurações da sala e de bots atualizadas com sucesso!');
+    } catch (e) {
+      console.error("Error updating room settings:", e);
+      toast.error('Erro ao atualizar configurações da sala.');
+    }
   };
 
   const handleSendMessage = (roomId: string, text: string) => {
@@ -260,6 +385,8 @@ export default function App() {
   // 🤖 Criação Automática de Salas & Bots Real-time Sync
   const [autoRoomEnabled, setAutoRoomEnabled] = useState(false);
   const [autoRoomInterval, setAutoRoomInterval] = useState(5);
+  const [autoRoomStartHour, setAutoRoomStartHour] = useState("00:00");
+  const [autoRoomEndHour, setAutoRoomEndHour] = useState("23:59");
   const [processedRooms, setProcessedRooms] = useState<Set<string>>(new Set());
   const [scheduledDeletions, setScheduledDeletions] = useState<Set<string>>(new Set());
 
@@ -277,6 +404,8 @@ export default function App() {
             const data = docSnap.data();
             setAutoRoomEnabled(data.enabled ?? false);
             setAutoRoomInterval(data.intervalMinutes ?? 5);
+            setAutoRoomStartHour(data.startHour ?? "00:00");
+            setAutoRoomEndHour(data.endHour ?? "23:59");
           }
         });
       } catch (err) {
@@ -295,7 +424,9 @@ export default function App() {
       const { db } = await import('./lib/firebase');
       await setDoc(doc(db, 'settings', 'global_automation'), {
         enabled: newVal,
-        intervalMinutes: autoRoomInterval
+        intervalMinutes: autoRoomInterval,
+        startHour: autoRoomStartHour,
+        endHour: autoRoomEndHour
       }, { merge: true });
       toast.success(newVal ? 'Criação automática ativada!' : 'Criação automática desativada!');
     } catch (e) {
@@ -310,9 +441,29 @@ export default function App() {
       const { db } = await import('./lib/firebase');
       await setDoc(doc(db, 'settings', 'global_automation'), {
         enabled: autoRoomEnabled,
-        intervalMinutes: val
+        intervalMinutes: val,
+        startHour: autoRoomStartHour,
+        endHour: autoRoomEndHour
       }, { merge: true });
       toast.success(`Intervalo atualizado para ${val} min!`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomHours = async (start: string, end: string) => {
+    setAutoRoomStartHour(start);
+    setAutoRoomEndHour(end);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        enabled: autoRoomEnabled,
+        intervalMinutes: autoRoomInterval,
+        startHour: start,
+        endHour: end
+      }, { merge: true });
+      toast.success(`Funcionamento automático configurado das ${start} às ${end}!`);
     } catch (e) {
       console.error(e);
     }
@@ -371,6 +522,21 @@ export default function App() {
     if (!autoRoomEnabled) return;
     
     const interval = setInterval(() => {
+      // Check if current time is within the allowed daily window
+      const now = new Date();
+      const currentHourStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      
+      let isWithinWindow = false;
+      if (autoRoomStartHour <= autoRoomEndHour) {
+        isWithinWindow = currentHourStr >= autoRoomStartHour && currentHourStr <= autoRoomEndHour;
+      } else {
+        isWithinWindow = currentHourStr >= autoRoomStartHour || currentHourStr <= autoRoomEndHour;
+      }
+      
+      if (!isWithinWindow) {
+        return; // Current time is outside the active automatic generation window
+      }
+
       const autoRooms = appState.rooms.filter(r => r.isAutoCreated);
       const totalActiveAutoRooms = autoRooms.filter(r => r.status === 'waiting' || r.status === 'active').length;
       const hasUpcomingAutoRoom = autoRooms.some(r => r.status === 'waiting');
@@ -381,13 +547,13 @@ export default function App() {
     }, 10000);
     
     return () => clearInterval(interval);
-  }, [autoRoomEnabled, appState.rooms, autoRoomInterval]);
+  }, [autoRoomEnabled, appState.rooms, autoRoomInterval, autoRoomStartHour, autoRoomEndHour]);
 
   // Monitoramento e auto-exclusão de salas com ganhador ou última bola sorteada após 30 segundos
   useEffect(() => {
     appState.rooms.forEach(room => {
       if (room.isAutoCreated && !scheduledDeletions.has(room.id)) {
-        const winners = room.players.filter(p => isCardWinner(p.card, room.drawnNumbers, room.gameMode || 'full_card'));
+        const winners = (room.players || []).filter(p => isCardWinner(p.card, room.drawnNumbers, room.gameMode || 'full_card'));
         const hasWinner = winners.length > 0;
         const reachedLastBall = room.drawnNumbers.length >= 75;
         const isFinished = room.status === 'finished';
@@ -425,7 +591,7 @@ export default function App() {
     const activeRoom = appState.rooms.find(r => r.id === appState.currentRoomId);
     if (!activeRoom || activeRoom.status !== 'active') return;
     
-    const botPlayers = activeRoom.players.filter(p => p.id.startsWith('bot_') || p.id.includes('bot'));
+    const botPlayers = (activeRoom.players || []).filter(p => p.id.startsWith('bot_') || p.id.includes('bot'));
     if (botPlayers.length === 0) return;
     
     const chatTick = setInterval(async () => {
@@ -472,10 +638,12 @@ export default function App() {
     return () => clearInterval(chatTick);
   }, [appState.currentRoomId, appState.rooms]);
 
-  // Sincronizar salas via onSnapshot em tempo real
+  // Sincronizar salas via onSnapshot em tempo real com subcoleção de jogadores para contagem exata de bots e players
   useEffect(() => {
     if (!appState.currentUser) return;
     let unsubRooms: () => void = () => {};
+    const playerUnsubs: { [roomId: string]: () => void } = {};
+
     const initRoomsRealtimeSync = async () => {
       try {
         const { collection, onSnapshot } = await import('firebase/firestore');
@@ -483,9 +651,11 @@ export default function App() {
         
         unsubRooms = onSnapshot(collection(db, 'rooms'), (snap) => {
           const roomsList: Room[] = [];
+          const activeRoomIds = new Set<string>();
           
           snap.forEach(docSnap => {
             const data = docSnap.data();
+            activeRoomIds.add(docSnap.id);
             roomsList.push({
               id: docSnap.id,
               name: data.name,
@@ -494,8 +664,8 @@ export default function App() {
               maxPlayers: data.maxPlayers || 10,
               status: data.status,
               drawnNumbers: data.drawnNumbers || [],
-              players: [], // Synced live per room below
-              messages: [], // Synced live per room below
+              players: [], // Sincronizado dinamicamente abaixo
+              messages: [],
               gameMode: data.gameMode || 'full_card',
               prize: data.prize || 100,
               bgMusicUrl: data.bgMusicUrl,
@@ -506,17 +676,71 @@ export default function App() {
             } as any);
           });
           
-          setAppState(prev => ({
-            ...prev,
-            rooms: roomsList
-          }));
+          // Limpa inscrições de salas deletadas
+          Object.keys(playerUnsubs).forEach(rId => {
+            if (!activeRoomIds.has(rId)) {
+              playerUnsubs[rId]();
+              delete playerUnsubs[rId];
+            }
+          });
+          
+          // Abre escuta em tempo real dos jogadores de cada sala aberta para sincronizar bots e players
+          roomsList.forEach(room => {
+            if (!playerUnsubs[room.id]) {
+              playerUnsubs[room.id] = onSnapshot(collection(db, 'rooms', room.id, 'players'), (pSnap) => {
+                const fetchedPlayers: any[] = [];
+                pSnap.forEach(pDoc => {
+                  const d = pDoc.data();
+                  const rawCard = d.card;
+                  let finalCard = rawCard;
+                  if (rawCard && Array.isArray(rawCard.grid)) {
+                    const firstRow = rawCard.grid[0];
+                    if (firstRow && !Array.isArray(firstRow) && typeof firstRow === 'object') {
+                      finalCard = {
+                        ...rawCard,
+                        grid: deserializeGrid(rawCard.grid)
+                      };
+                    }
+                  }
+                  fetchedPlayers.push({
+                    id: pDoc.id,
+                    name: d.name,
+                    card: finalCard
+                  });
+                });
+                
+                setAppState(prev => ({
+                  ...prev,
+                  rooms: prev.rooms.map(r => r.id === room.id ? { ...r, players: fetchedPlayers } : r)
+                }));
+              });
+            }
+          });
+          
+          setAppState(prev => {
+            const finalRooms = roomsList.map(item => {
+              const prevRoom = prev.rooms.find(pr => pr.id === item.id);
+              return {
+                ...item,
+                players: prevRoom ? prevRoom.players : []
+              };
+            });
+            return {
+              ...prev,
+              rooms: finalRooms
+            };
+          });
         });
       } catch (err) {
         console.log("Real-time rooms listener error:", err);
       }
     };
     initRoomsRealtimeSync();
-    return () => unsubRooms();
+    
+    return () => {
+      unsubRooms();
+      Object.values(playerUnsubs).forEach(unsub => unsub());
+    };
   }, [appState.currentUser]);
 
   // Sincronizar jogadores e chat em tempo real da sala de jogo atual
@@ -620,7 +844,7 @@ export default function App() {
         return next;
       });
 
-      const winners = finishedRoom.players.filter(p => isCardWinner(p.card, finishedRoom.drawnNumbers, finishedRoom.gameMode || 'full_card'));
+      const winners = (finishedRoom.players || []).filter(p => isCardWinner(p.card, finishedRoom.drawnNumbers, finishedRoom.gameMode || 'full_card'));
       const isUserWinner = winners.some(w => w.id === appState.currentUser!.uid);
       const sharePrize = finishedRoom.prize && winners.length > 0 
         ? Math.floor(finishedRoom.prize / winners.length) 
@@ -674,91 +898,95 @@ export default function App() {
     }
   }, [appState.rooms, appState.currentRoomId, appState.currentUser, processedRooms]);
 
+  // Sincroniza início de salas agendadas no Firestore em tempo real de forma idempotente
   useEffect(() => {
+    if (!appState.currentUser) return;
     const clockStatus = setInterval(() => {
-      setAppState(prev => {
-         let changed = false;
-         const newRooms = prev.rooms.map(r => {
-            if (r.status === 'waiting' && Date.now() >= r.scheduledTime) {
-               changed = true;
-               return { ...r, status: 'active' as const };
-            }
-            return r;
-         });
-         return changed ? { ...prev, rooms: newRooms } : prev;
+      appState.rooms.forEach(async (room) => {
+        if (room.status === 'waiting' && Date.now() >= room.scheduledTime) {
+          try {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const { db } = await import('./lib/firebase');
+            await updateDoc(doc(db, 'rooms', room.id), { status: 'active' });
+            console.log(`[Scheduled Start] Sala ${room.id} decolou no Firestore com sucesso.`);
+          } catch (e) {
+            console.error(e);
+          }
+        }
       });
     }, 1000);
     return () => clearInterval(clockStatus);
-  }, []);
+  }, [appState.rooms, appState.currentUser]);
+
+  // Motor Distribuído: Host autoritativo sorteia as bolas diretamente no Firestore
+  useEffect(() => {
+    if (!appState.currentUser) return;
+    
+    const activeRooms = appState.rooms.filter(r => r.status === 'active');
+    if (activeRooms.length === 0) return;
+
+    const interval = setInterval(() => {
+      activeRooms.forEach(async (room) => {
+        // Define se este usuário logado atua como coordenador do sorteio nesta rodada:
+        // Se for admin e estiver ativamente visualizando o painel com autodraw ligado, ou o primeiro jogador (por ordem alfabética de UID) se o admin estiver ausente ou para salas automáticas.
+        const isHost = (() => {
+          if (appState.currentUser?.role === 'admin') {
+            return appState.currentRoomId === room.id && isAdminAutoDraw;
+          }
+          
+          const normalPlayers = (room.players || []).filter(p => !p.id.startsWith('bot_'));
+          if (normalPlayers.length === 0) return false;
+          
+          const sortedNormalPlayers = [...normalPlayers].sort((a, b) => a.id.localeCompare(b.id));
+          return sortedNormalPlayers[0]?.id === appState.currentUser?.uid;
+        })();
+
+        if (!isHost) return;
+
+        // Verifica ganhadores antes de sorteador nova bola
+        const winners = (room.players || []).filter(p => isCardWinner(p.card, room.drawnNumbers, room.gameMode || 'full_card'));
+        if (winners.length > 0 || room.drawnNumbers.length >= 75) {
+          try {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const { db } = await import('./lib/firebase');
+            await updateDoc(doc(db, 'rooms', room.id), { status: 'finished' });
+            if (appState.currentUser?.role === 'admin') {
+              setIsAdminAutoDraw(false);
+            }
+          } catch (e) {
+            console.error("Erro ao encerrar a sala no Firestore:", e);
+          }
+          return;
+        }
+
+        // Sorteia próximo número livre
+        let available = Array.from({length: 75}, (_, i) => i + 1).filter(n => !room.drawnNumbers.includes(n));
+        if (available.length > 0) {
+          const nextNum = available[Math.floor(Math.random() * available.length)];
+          try {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const { db } = await import('./lib/firebase');
+            await updateDoc(doc(db, 'rooms', room.id), { 
+              drawnNumbers: [...room.drawnNumbers, nextNum] 
+            });
+          } catch (e) {
+            console.error("Erro ao sortear próximo número no Firestore:", e);
+          }
+        }
+      });
+    }, 5000); // Sorteio a cada 5 segundos
+    
+    return () => clearInterval(interval);
+  }, [appState.rooms, appState.currentUser, appState.currentRoomId, isAdminAutoDraw]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    interval = setInterval(() => {
-      setAppState(prev => {
-        let changed = false;
-        let nextCurrentUser = prev.currentUser;
-        let nextView = prev.view;
-        let nextCurrentRoomId = prev.currentRoomId;
-        
-        const newRooms = prev.rooms.map(room => {
-          if (room.status === 'active') {
-            const winners = room.players.filter(p => isCardWinner(p.card, room.drawnNumbers, room.gameMode));
-            
-            if (winners.length > 0 || room.drawnNumbers.length >= 75) {
-              changed = true;
-              if (winners.length > 0 && nextCurrentUser && room.prize) {
-                  const isUserWinner = winners.some(w => w.id === nextCurrentUser!.uid);
-                  if (isUserWinner) {
-                      nextCurrentUser = {
-                          ...nextCurrentUser,
-                          coins: nextCurrentUser.coins + Math.floor(room.prize / winners.length)
-                      };
-                  }
-              }
-
-              // Check if the current user is active inside this room that just ended
-              if (prev.currentRoomId === room.id) {
-                nextView = 'player_lobby';
-                nextCurrentRoomId = null;
-
-                if (winners.length > 0) {
-                  const speakerNames = winners.map(w => w.name).join(', ');
-                  setTimeout(() => {
-                    toast.success(`🎉 Bingo! Ganhador(es): ${speakerNames}!`, { duration: 6000 });
-                  }, 150);
-                } else {
-                  setTimeout(() => {
-                    toast.success(`Partida finalizada! Retornando ao lobby.`, { duration: 4000 });
-                  }, 150);
-                }
-              }
-
-              return { ...room, status: 'finished' as const };
-            }
-            
-            let available = Array.from({length: 75}, (_, i) => i + 1).filter(n => !room.drawnNumbers.includes(n));
-            if (available.length > 0) {
-              changed = true;
-              return { ...room, drawnNumbers: [...room.drawnNumbers, available[Math.floor(Math.random() * available.length)]] };
-            }
-          }
-          return room;
-        });
-
-        if (changed) {
-          return { 
-            ...prev, 
-            rooms: newRooms, 
-            currentUser: nextCurrentUser, 
-            view: nextView, 
-            currentRoomId: nextCurrentRoomId 
-          };
-        }
-        return prev;
-      });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    if (appState.currentRoomId && appState.view === 'player_game') {
+      const roomExists = appState.rooms.some(r => r.id === appState.currentRoomId);
+      if (!roomExists) {
+        setAppState(prev => ({ ...prev, view: 'player_lobby', currentRoomId: null }));
+      }
+    }
+  }, [appState.rooms, appState.currentRoomId, appState.view]);
 
   if (appState.showAuth) {
     return (
@@ -918,10 +1146,14 @@ export default function App() {
                   onCreateRoom={handleCreateRoom} 
                   onEnterRoom={(id) => setAppState(prev => ({ ...prev, currentRoomId: id }))} 
                   onDeleteRoom={handleDeleteRoom}
+                  onUpdateRoomSettings={handleUpdateRoomSettings}
                   autoRoomEnabled={autoRoomEnabled}
                   autoRoomInterval={autoRoomInterval}
+                  autoRoomStartHour={autoRoomStartHour}
+                  autoRoomEndHour={autoRoomEndHour}
                   onToggleAutoRoomEnabled={handleToggleAutoRoomEnabled}
                   onUpdateAutoRoomInterval={handleUpdateAutoRoomInterval}
+                  onUpdateAutoRoomHours={handleUpdateAutoRoomHours}
                 />
               )
            ) : (
@@ -978,10 +1210,29 @@ export default function App() {
   }
 
   if (appState.view === 'player_game' && appState.currentRoomId) {
-     const room = appState.rooms.find(r => r.id === appState.currentRoomId)!;
-     const player = room.players.find(p => p.id === appState.currentUser!.uid);
+     const room = appState.rooms.find(r => r.id === appState.currentRoomId);
+     if (!room) {
+       return (
+         <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 p-6">
+           <div className="text-center space-y-4 max-w-sm">
+             <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+             <h3 className="text-lg font-black text-slate-800 dark:text-white">Sala não encontrada</h3>
+             <p className="text-slate-550 dark:text-slate-400 text-xs font-semibold">Esta sala pode ter sido encerrada ou excluída pelo administrador. Retornando ao saguão...</p>
+             <button 
+               onClick={() => setAppState(prev => ({ ...prev, view: 'player_lobby', currentRoomId: null }))}
+               className="w-full py-2.5 bg-indigo-600 dark:bg-indigo-650 hover:bg-indigo-750 text-white font-black rounded-xl text-xs uppercase tracking-wider shadow-md cursor-pointer transition-all"
+             >
+               Voltar para o Saguão
+             </button>
+           </div>
+         </div>
+       );
+     }
+     
+     const playersList = room.players || [];
+     const player = playersList.find(p => p.id === (appState.currentUser?.uid || ''));
      const isSpectator = !player;
-     const card = player ? player.card : generateBingoCard('SPECTATOR', appState.currentUser!.name);
+     const card = player ? player.card : generateBingoCard('SPECTATOR', appState.currentUser?.name || 'Espectador');
      
      // Calculate time left (simulated)
      const timeLeftSeconds = Math.max(0, Math.floor((room.scheduledTime - Date.now()) / 1000));
@@ -991,30 +1242,30 @@ export default function App() {
          <Toaster position="top-center" />
          <PlayerMobileView 
            card={card}
-           drawnNumbers={room.drawnNumbers}
+           drawnNumbers={room.drawnNumbers || []}
            user={{ ...appState.currentUser!, avatar: appState.currentUser!.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + appState.currentUser!.name }}
            timeLeft={timeLeftSeconds}
            scheduledTime={room.scheduledTime}
-           messages={room.messages}
+           messages={room.messages || []}
            gameMode={room.gameMode}
            prize={room.prize}
            isSpectator={isSpectator}
            initialSoundEnabled={appState.settings?.soundEnabled ?? true}
            bgMusicUrl={room.bgMusicUrl}
            onlineRadioUrl={room.onlineRadioUrl}
-           participants={room.players.map(p => {
+           participants={playersList.map(p => {
              // We don't have the full User object in room.players in this mock, just id and name.
-            // In a real app we'd fetch their photoURL. For now we use dicebear.
-            const fullUser = appState.currentUser?.uid === p.id ? appState.currentUser : null;
-            return { uid: p.id, name: p.name, avatar: fullUser?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + p.name };
-          })}
-          playersList={room.players}
+             // In a real app we'd fetch their photoURL. For now we use dicebear.
+             const fullUser = appState.currentUser?.uid === p.id ? appState.currentUser : null;
+             return { uid: p.id, name: p.name, avatar: fullUser?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + p.name };
+           })}
+           playersList={playersList}
            onExit={() => setAppState(prev => ({ ...prev, view: 'player_lobby', currentRoomId: null }))}
-          onSendMessage={(text) => handleSendMessage(room.id, text)}
-          onOpenProfile={() => setAppState(prev => ({ ...prev, view: 'profile' }))}
-        />
-      </>
-       );
+           onSendMessage={(text) => handleSendMessage(room.id, text)}
+           onOpenProfile={() => setAppState(prev => ({ ...prev, view: 'profile' }))}
+         />
+       </>
+     );
   }
 
   if (appState.view === 'settings') {

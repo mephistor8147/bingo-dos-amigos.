@@ -507,9 +507,9 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
 
               <div className="flex items-center gap-2 shrink-0">
                 {/* Countdown Clock (Always Visible) */}
-                <div className="bg-emerald-50 dark:bg-slate-850 border border-emerald-200/50 dark:border-slate-750 rounded-xl px-2.5 h-10 flex items-center gap-1 shadow-sm shrink-0">
-                   <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                   <span className="text-emerald-700 dark:text-emerald-300 font-extrabold text-xs tracking-wider">{formatTime(localTimeLeft)}</span>
+                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200/50 dark:border-red-900/40 rounded-xl px-2.5 h-10 flex items-center gap-1 shadow-sm shrink-0">
+                   <Clock className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                   <span className="text-red-700 dark:text-red-400 font-black text-xs tracking-wider">{formatTime(localTimeLeft)}</span>
                 </div>
 
                 {/* Icon toggle button */}
