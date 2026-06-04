@@ -10,54 +10,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { AdminUsers } from './components/AdminUsers';
 import { Toaster, toast } from 'react-hot-toast';
 import { Moon, Sun, LogOut } from 'lucide-react';
-import { generateBingoCard } from './utils';
-
-const isCardWinner = (card: BingoCardData, drawnNumbers: number[], gameMode: GameMode = 'full_card') => {
-  const checkMarked = (r: number, c: number) => {
-    if (r < 0 || r > 4 || c < 0 || c > 4) return false;
-    const cell = card.grid[r][c];
-    return cell === 'FREE' || drawnNumbers.includes(cell as number);
-  };
-
-  if (gameMode === 'full_card') {
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        if (!checkMarked(r, c)) return false;
-      }
-    }
-    return true;
-  } else if (gameMode === 'line') {
-    for (let r = 0; r < 5; r++) {
-      let rowWin = true;
-      for (let c = 0; c < 5; c++) {
-         if (!checkMarked(r, c)) rowWin = false;
-      }
-      if (rowWin) return true;
-    }
-    for (let c = 0; c < 5; c++) {
-      let colWin = true;
-      for (let r = 0; r < 5; r++) {
-         if (!checkMarked(r, c)) colWin = false;
-      }
-      if (colWin) return true;
-    }
-  } else if (gameMode === 'block_of_4') {
-    // Verifica 16 possíveis blocos de 2x2 dentro da cartela 5x5
-    for (let r = 0; r <= 3; r++) {
-      for (let c = 0; c <= 3; c++) {
-        const topLeft = checkMarked(r, c);
-        const topRight = checkMarked(r, c + 1);
-        const bottomLeft = checkMarked(r + 1, c);
-        const bottomRight = checkMarked(r + 1, c + 1);
-        
-        if (topLeft && topRight && bottomLeft && bottomRight) {
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-};
+import { generateBingoCard, isCardWinner, serializeGrid, deserializeGrid } from './utils';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState & { showAuth?: boolean }>(() => {
@@ -95,6 +48,43 @@ export default function App() {
     }
   }, [appState.settings]);
 
+  // Restaura sessão do Firebase Auth automaticamente
+  useEffect(() => {
+    let unsubPromise = (async () => {
+      const { onAuthStateChanged } = await import('firebase/auth');
+      const { getDoc, doc } = await import('firebase/firestore');
+      const { auth, db } = await import('./lib/firebase');
+
+      return onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (userSnap.exists()) {
+              const userData = userSnap.data();
+              setAppState(prev => {
+                const isHome = prev.view === 'home';
+                return {
+                  ...prev,
+                  currentUser: userData as any,
+                  view: isHome ? (userData.role === 'admin' ? 'admin' : 'player_lobby') : prev.view,
+                  showAuth: false
+                };
+              });
+            }
+          } catch (err) {
+            console.error("Error automatic session retrieve:", err);
+          }
+        }
+      });
+    })();
+
+    return () => {
+      unsubPromise.then(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+    };
+  }, []);
+
   const handleLogout = async () => {
     try {
       const { auth } = await import('./lib/firebase');
@@ -110,6 +100,30 @@ export default function App() {
       currentRoomId: null
     }));
     toast.success('Sessão encerrada.');
+  };
+
+  const handleUpdateProfilePhoto = async (photoURL: string) => {
+    if (!appState.currentUser) return;
+    try {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      
+      const userRef = doc(db, 'users', appState.currentUser.uid);
+      await updateDoc(userRef, { photoURL });
+      
+      setAppState(prev => ({
+        ...prev,
+        currentUser: prev.currentUser ? { ...prev.currentUser, photoURL } : null
+      }));
+      toast.success('Foto do perfil atualizada com sucesso!');
+    } catch (e: any) {
+      console.error(e);
+      setAppState(prev => ({
+        ...prev,
+        currentUser: prev.currentUser ? { ...prev.currentUser, photoURL } : null
+      }));
+      toast.success('Foto atualizada com sucesso localmente.');
+    }
   };
 
   const handleLoginSuccess = (user: any, role: 'admin' | 'player') => {
@@ -142,36 +156,53 @@ export default function App() {
     toast.success('Sala criada com sucesso!');
   };
 
-  const handleJoinRoom = (roomId: string, card: BingoCardData) => {
-    setAppState(prev => {
-      const room = prev.rooms.find(r => r.id === roomId);
-      if (!room || prev.currentUser!.coins < room.entryFee) {
-          if (!room) toast.error('Sala não encontrada.');
-          else toast.error('Saldo insuficiente.');
-          return prev;
-      }
+  const handleJoinRoom = async (roomId: string, card: BingoCardData) => {
+    if (!appState.currentUser) return;
+    const room = appState.rooms.find(r => r.id === roomId);
+    if (!room) {
+      toast.error('Sala não encontrada.');
+      return;
+    }
+    if (appState.currentUser.coins < room.entryFee) {
+      toast.error('Saldo insuficiente.');
+      return;
+    }
+
+    try {
+      const { doc, setDoc, updateDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
       
-      const newRooms = prev.rooms.map(r => {
-        if (r.id === roomId) {
-          return {
-            ...r,
-            players: [...r.players, { id: prev.currentUser!.uid, name: prev.currentUser!.name, card }]
-          };
+      const userRef = doc(db, 'users', appState.currentUser.uid);
+      const newCoins = appState.currentUser.coins - room.entryFee;
+      
+      // Update coins
+      await updateDoc(userRef, { coins: newCoins });
+      
+      // Add player to the room in Firestore
+      await setDoc(doc(db, 'rooms', roomId, 'players', appState.currentUser.uid), {
+        name: appState.currentUser.name,
+        card: {
+          id: card.id,
+          playerName: card.playerName,
+          grid: serializeGrid(card.grid)
         }
-        return r;
       });
       
-      toast.success('Você entrou na sala! Boa sorte!');
-
-      return {
-        ...prev,
-        rooms: newRooms,
-        currentUser: {
-          ...prev.currentUser!,
-          coins: prev.currentUser!.coins - room.entryFee
-        }
-      };
-    });
+      setAppState(prev => {
+        return {
+          ...prev,
+          currentUser: prev.currentUser ? {
+            ...prev.currentUser,
+            coins: newCoins
+          } : null
+        };
+      });
+      
+      toast.success('Você entrou na sala! Boa sorte! 🎟️');
+    } catch (e) {
+      console.error("Error joining room:", e);
+      toast.error('Erro ao entrar na sala. Tente novamente.');
+    }
   };
 
   const handleDrawNumberAdmin = (roomId: string, num: number) => {
@@ -188,7 +219,14 @@ export default function App() {
     }));
   };
 
-  const handleDeleteRoom = (roomId: string) => {
+  const handleDeleteRoom = async (roomId: string) => {
+    try {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await deleteDoc(doc(db, 'rooms', roomId));
+    } catch (e) {
+      console.error("Error deleting room from Firestore:", e);
+    }
     setAppState(prev => ({
       ...prev,
       rooms: prev.rooms.filter(r => r.id !== roomId)
@@ -218,6 +256,423 @@ export default function App() {
   const [isAdminAutoDraw, setIsAdminAutoDraw] = useState(false);
   const [isAdminSpeechEnabled, setIsAdminSpeechEnabled] = useState(true);
   const [adminVoiceGender, setAdminVoiceGender] = useState<'female' | 'male'>('female');
+
+  // 🤖 Criação Automática de Salas & Bots Real-time Sync
+  const [autoRoomEnabled, setAutoRoomEnabled] = useState(false);
+  const [autoRoomInterval, setAutoRoomInterval] = useState(5);
+  const [processedRooms, setProcessedRooms] = useState<Set<string>>(new Set());
+  const [scheduledDeletions, setScheduledDeletions] = useState<Set<string>>(new Set());
+
+  // Sincronizar Configuração Global via Firestore
+  useEffect(() => {
+    if (!appState.currentUser) return;
+    let unsub: () => void = () => {};
+    const initAutomationSync = async () => {
+      try {
+        const { doc, onSnapshot } = await import('firebase/firestore');
+        const { db } = await import('./lib/firebase');
+        
+        unsub = onSnapshot(doc(db, 'settings', 'global_automation'), (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setAutoRoomEnabled(data.enabled ?? false);
+            setAutoRoomInterval(data.intervalMinutes ?? 5);
+          }
+        });
+      } catch (err) {
+        console.warn("Firestore settings: using local state fallback.");
+      }
+    };
+    initAutomationSync();
+    return () => unsub();
+  }, [appState.currentUser]);
+
+  const handleToggleAutoRoomEnabled = async () => {
+    const newVal = !autoRoomEnabled;
+    setAutoRoomEnabled(newVal);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        enabled: newVal,
+        intervalMinutes: autoRoomInterval
+      }, { merge: true });
+      toast.success(newVal ? 'Criação automática ativada!' : 'Criação automática desativada!');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomInterval = async (val: number) => {
+    setAutoRoomInterval(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        enabled: autoRoomEnabled,
+        intervalMinutes: val
+      }, { merge: true });
+      toast.success(`Intervalo atualizado para ${val} min!`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Criação automática de salas: se ativado, agenda uma nova se não houver nenhuma agendada
+  const triggerAutoRoomCreation = async () => {
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      
+      const newRoomId = 'auto_' + Math.random().toString(36).substring(2, 9);
+      const scheduledTime = Date.now() + autoRoomInterval * 60 * 1000;
+      
+      const roomPayload = {
+        name: `Sala Automática ⚡`,
+        entryFee: 40,
+        prize: 400,
+        scheduledTime,
+        maxPlayers: 10,
+        status: 'waiting',
+        drawnNumbers: [],
+        gameMode: 'full_card',
+        botsEnabled: true,
+        maxBots: 2,
+        isAutoCreated: true
+      };
+      
+      await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+      
+      // Adicionar 2 bots na coleção de players
+      const botNames = ["Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato"];
+      const shuffled = [...botNames].sort(() => 0.5 - Math.random());
+      
+      for (let i = 0; i < 2; i++) {
+        const botId = `bot_auto_${Math.random().toString(36).substring(2, 9)}`;
+        const botCard = generateBingoCard(botId, shuffled[i]);
+        await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
+          name: shuffled[i],
+          card: {
+            id: botCard.id,
+            playerName: botCard.playerName,
+            grid: serializeGrid(botCard.grid)
+          }
+        });
+      }
+      
+      console.log("Automatic Scheduled Room created.");
+    } catch (e) {
+      console.error("Auto room creator failure:", e);
+    }
+  };
+
+  // Background Auto Room Scheduled loop
+  useEffect(() => {
+    if (!autoRoomEnabled) return;
+    
+    const interval = setInterval(() => {
+      const autoRooms = appState.rooms.filter(r => r.isAutoCreated);
+      const totalActiveAutoRooms = autoRooms.filter(r => r.status === 'waiting' || r.status === 'active').length;
+      const hasUpcomingAutoRoom = autoRooms.some(r => r.status === 'waiting');
+      
+      if (!hasUpcomingAutoRoom && totalActiveAutoRooms < 3 && appState.rooms.length > 0) {
+        triggerAutoRoomCreation();
+      }
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [autoRoomEnabled, appState.rooms, autoRoomInterval]);
+
+  // Monitoramento e auto-exclusão de salas com ganhador ou última bola sorteada após 30 segundos
+  useEffect(() => {
+    appState.rooms.forEach(room => {
+      if (room.isAutoCreated && !scheduledDeletions.has(room.id)) {
+        const winners = room.players.filter(p => isCardWinner(p.card, room.drawnNumbers, room.gameMode || 'full_card'));
+        const hasWinner = winners.length > 0;
+        const reachedLastBall = room.drawnNumbers.length >= 75;
+        const isFinished = room.status === 'finished';
+
+        if (isFinished || hasWinner || reachedLastBall) {
+          setScheduledDeletions(prev => {
+            const next = new Set(prev);
+            next.add(room.id);
+            return next;
+          });
+
+          console.log(`[Auto Delete] Sorteio finalizado ou ganhador identificado na sala ${room.id}. Excluindo em 30 segundos...`);
+          setTimeout(async () => {
+            try {
+              const { doc, deleteDoc } = await import('firebase/firestore');
+              const { db } = await import('./lib/firebase');
+              await deleteDoc(doc(db, 'rooms', room.id));
+              console.log(`[Auto Delete] Sala ${room.id} excluída do Firestore com sucesso.`);
+            } catch (e) {
+              console.error(`[Auto Delete] Erro ao excluir sala ${room.id} do Firestore:`, e);
+            }
+
+            setAppState(prev => ({
+              ...prev,
+              rooms: prev.rooms.filter(r => r.id !== room.id)
+            }));
+          }, 30000);
+        }
+      }
+    });
+  }, [appState.rooms, scheduledDeletions]);
+
+  // Background Interactive Bots Chat Commentary Simulation
+  useEffect(() => {
+    const activeRoom = appState.rooms.find(r => r.id === appState.currentRoomId);
+    if (!activeRoom || activeRoom.status !== 'active') return;
+    
+    const botPlayers = activeRoom.players.filter(p => p.id.startsWith('bot_') || p.id.includes('bot'));
+    if (botPlayers.length === 0) return;
+    
+    const chatTick = setInterval(async () => {
+      if (Math.random() > 0.4) return;
+      
+      const randomBot = botPlayers[Math.floor(Math.random() * botPlayers.length)];
+      const commentaries = [
+        "Falta só um pra mim! 😱",
+        "Pede B-12! Só vem!",
+        "Esse prêmio já é meu, kkkk",
+        "Nossa, to longe de ganhar ainda rs",
+        "Boa sorte galera! Bingo tá emocionante!",
+        "Agora vai! Marquei agora!",
+        "Mais alguém na boa?",
+        "BINGO tá vindo!!! 🔥",
+        "Quase marquei essa de agora!!! 😂",
+        "Vem número bom pfv!!!",
+        "Vambora bingo!!! 🔥"
+      ];
+      
+      if (activeRoom.drawnNumbers.length > 25) {
+        commentaries.push("Meu Deus, o coração tá batendo forte!");
+        commentaries.push("Ta quase de sair o ganhador!!!");
+      }
+      
+      const messageText = commentaries[Math.floor(Math.random() * commentaries.length)];
+      
+      try {
+        const { doc, setDoc } = await import('firebase/firestore');
+        const { db } = await import('./lib/firebase');
+        
+        const messageId = `botmsg_${Math.random().toString(36).substring(2, 9)}`;
+        await setDoc(doc(db, 'rooms', activeRoom.id, 'messages', messageId), {
+          senderId: randomBot.id,
+          senderName: randomBot.name,
+          text: messageText,
+          timestamp: Date.now()
+        });
+      } catch (err) {
+        console.error("Bot chat message error:", err);
+      }
+    }, 15000);
+    
+    return () => clearInterval(chatTick);
+  }, [appState.currentRoomId, appState.rooms]);
+
+  // Sincronizar salas via onSnapshot em tempo real
+  useEffect(() => {
+    if (!appState.currentUser) return;
+    let unsubRooms: () => void = () => {};
+    const initRoomsRealtimeSync = async () => {
+      try {
+        const { collection, onSnapshot } = await import('firebase/firestore');
+        const { db } = await import('./lib/firebase');
+        
+        unsubRooms = onSnapshot(collection(db, 'rooms'), (snap) => {
+          const roomsList: Room[] = [];
+          
+          snap.forEach(docSnap => {
+            const data = docSnap.data();
+            roomsList.push({
+              id: docSnap.id,
+              name: data.name,
+              scheduledTime: data.scheduledTime,
+              entryFee: data.entryFee,
+              maxPlayers: data.maxPlayers || 10,
+              status: data.status,
+              drawnNumbers: data.drawnNumbers || [],
+              players: [], // Synced live per room below
+              messages: [], // Synced live per room below
+              gameMode: data.gameMode || 'full_card',
+              prize: data.prize || 100,
+              bgMusicUrl: data.bgMusicUrl,
+              onlineRadioUrl: data.onlineRadioUrl,
+              botsEnabled: data.botsEnabled || false,
+              maxBots: data.maxBots || 0,
+              isAutoCreated: data.isAutoCreated || false
+            } as any);
+          });
+          
+          setAppState(prev => ({
+            ...prev,
+            rooms: roomsList
+          }));
+        });
+      } catch (err) {
+        console.log("Real-time rooms listener error:", err);
+      }
+    };
+    initRoomsRealtimeSync();
+    return () => unsubRooms();
+  }, [appState.currentUser]);
+
+  // Sincronizar jogadores e chat em tempo real da sala de jogo atual
+  useEffect(() => {
+    if (!appState.currentRoomId) return;
+    
+    let unsubPlayers: () => void = () => {};
+    let unsubMessages: () => void = () => {};
+    
+    const initSubcollectionsSync = async () => {
+      try {
+        const { collection, onSnapshot, query, orderBy } = await import('firebase/firestore');
+        const { db } = await import('./lib/firebase');
+        
+        const rId = appState.currentRoomId!;
+        
+        unsubPlayers = onSnapshot(collection(db, 'rooms', rId, 'players'), (snap) => {
+          const fetchedPlayers: any[] = [];
+          snap.forEach(pSnap => {
+            const d = pSnap.data();
+            const rawCard = d.card;
+            let finalCard = rawCard;
+            if (rawCard && Array.isArray(rawCard.grid)) {
+              const firstRow = rawCard.grid[0];
+              if (firstRow && !Array.isArray(firstRow) && typeof firstRow === 'object') {
+                finalCard = {
+                  ...rawCard,
+                  grid: deserializeGrid(rawCard.grid)
+                };
+              }
+            }
+            fetchedPlayers.push({
+              id: pSnap.id,
+              name: d.name,
+              card: finalCard
+            });
+          });
+          
+          setAppState(prev => {
+            const newRooms = prev.rooms.map(r => {
+              if (r.id === rId) {
+                return { ...r, players: fetchedPlayers };
+              }
+              return r;
+            });
+            return { ...prev, rooms: newRooms };
+          });
+        });
+
+        unsubMessages = onSnapshot(
+          query(collection(db, 'rooms', rId, 'messages'), orderBy('timestamp', 'asc')),
+          (snap) => {
+            const fetchedMsgs: any[] = [];
+            snap.forEach(mSnap => {
+              const d = mSnap.data();
+              fetchedMsgs.push({
+                id: mSnap.id,
+                senderId: d.senderId,
+                senderName: d.senderName,
+                text: d.text,
+                timestamp: d.timestamp
+              });
+            });
+            
+            setAppState(prev => {
+              const newRooms = prev.rooms.map(r => {
+                if (r.id === rId) {
+                  return { ...r, messages: fetchedMsgs };
+                }
+                return r;
+              });
+              return { ...prev, rooms: newRooms };
+            });
+          }
+        );
+      } catch (err) {
+        console.error("Subcollections sync failure:", err);
+      }
+    };
+    
+    initSubcollectionsSync();
+    
+    return () => {
+      unsubPlayers();
+      unsubMessages();
+    };
+  }, [appState.currentRoomId]);
+
+  // Listen to completed games and process winner rewards
+  useEffect(() => {
+    if (!appState.currentUser) return;
+    
+    const finishedRoom = appState.rooms.find(
+      r => r.id === appState.currentRoomId && r.status === 'finished'
+    );
+    
+    if (finishedRoom && !processedRooms.has(finishedRoom.id)) {
+      setProcessedRooms(prev => {
+        const next = new Set(prev);
+        next.add(finishedRoom.id);
+        return next;
+      });
+
+      const winners = finishedRoom.players.filter(p => isCardWinner(p.card, finishedRoom.drawnNumbers, finishedRoom.gameMode || 'full_card'));
+      const isUserWinner = winners.some(w => w.id === appState.currentUser!.uid);
+      const sharePrize = finishedRoom.prize && winners.length > 0 
+        ? Math.floor(finishedRoom.prize / winners.length) 
+        : 0;
+
+      if (isUserWinner && sharePrize > 0) {
+        const creditAward = async () => {
+          try {
+            const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+            const { db } = await import('./lib/firebase');
+            
+            const userRef = doc(db, 'users', appState.currentUser!.uid);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+              const currentCoins = userSnap.data().coins || 0;
+              await updateDoc(userRef, {
+                coins: currentCoins + sharePrize
+              });
+              
+              setAppState(prev => ({
+                ...prev,
+                currentUser: prev.currentUser ? {
+                  ...prev.currentUser,
+                  coins: currentCoins + sharePrize
+                } : null
+              }));
+              
+              toast.success(`🎉 BINGO! Você faturou ${sharePrize} moedas! 🏆`, { duration: 8000 });
+            }
+          } catch (e) {
+            console.error("Error crediting winners:", e);
+          }
+        };
+        creditAward();
+      } else {
+        if (winners.length > 0) {
+          const winnerNames = winners.map(w => w.name).join(', ');
+          toast.success(`Rodada finalizada! Ganhador(es): ${winnerNames}`, { duration: 6000 });
+        } else {
+          toast.success(`Rodada terminada. Retornando ao lobby...`, { duration: 4000 });
+        }
+      }
+
+      setTimeout(() => {
+        setAppState(prev => ({
+          ...prev,
+          view: 'player_lobby',
+          currentRoomId: null
+        }));
+      }, 5000);
+    }
+  }, [appState.rooms, appState.currentRoomId, appState.currentUser, processedRooms]);
 
   useEffect(() => {
     const clockStatus = setInterval(() => {
@@ -370,8 +825,14 @@ export default function App() {
                  }`}
                >
                  Gerenciar Usuários
-               </button>
-             </div>
+                </button>
+                <button 
+                  onClick={() => setAppState(prev => ({ ...prev, view: 'player_lobby' }))}
+                  className="px-3 md:px-4 py-1.5 rounded-xl font-bold text-xs text-amber-600 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center gap-1 shrink-0"
+                >
+                  Ver Salas (Jogador)
+                </button>
+              </div>
 
              {/* Action triggers */}
              <div className="flex items-center gap-2">
@@ -452,7 +913,16 @@ export default function App() {
                   );
                 })()
               ) : (
-                <AdminRooms rooms={appState.rooms} onCreateRoom={handleCreateRoom} onEnterRoom={(id) => setAppState(prev => ({ ...prev, currentRoomId: id }))} onDeleteRoom={handleDeleteRoom} />
+                <AdminRooms 
+                  rooms={appState.rooms} 
+                  onCreateRoom={handleCreateRoom} 
+                  onEnterRoom={(id) => setAppState(prev => ({ ...prev, currentRoomId: id }))} 
+                  onDeleteRoom={handleDeleteRoom}
+                  autoRoomEnabled={autoRoomEnabled}
+                  autoRoomInterval={autoRoomInterval}
+                  onToggleAutoRoomEnabled={handleToggleAutoRoomEnabled}
+                  onUpdateAutoRoomInterval={handleUpdateAutoRoomInterval}
+                />
               )
            ) : (
              <AdminUsers onGoBack={() => setAdminTab('rooms')} />
@@ -463,10 +933,21 @@ export default function App() {
   }
 
   if (appState.view === 'player_lobby') {
+    const isAdmin = appState.currentUser?.role === 'admin';
     return (
        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors pt-10">
          <div className="max-w-4xl mx-auto px-6 mb-8 flex items-center justify-between">
-           <button onClick={handleLogout} className="text-slate-500 dark:text-slate-400 font-bold bg-white dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">Sair</button>
+           <div className="flex items-center gap-3">
+             <button onClick={handleLogout} className="text-slate-500 dark:text-slate-400 font-bold bg-white dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors">Sair</button>
+             {isAdmin && (
+               <button 
+                 onClick={() => setAppState(prev => ({ ...prev, view: 'admin' }))}
+                 className="bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl shadow-md border border-indigo-500 transition-all active:scale-95 text-xs uppercase tracking-wider shrink-0"
+               >
+                 ← Painel de Admin
+               </button>
+             )}
+           </div>
            
            {/* Quick dark mode button in player lobby header */}
            <button 
@@ -527,7 +1008,8 @@ export default function App() {
             const fullUser = appState.currentUser?.uid === p.id ? appState.currentUser : null;
             return { uid: p.id, name: p.name, avatar: fullUser?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + p.name };
           })}
-          onExit={() => setAppState(prev => ({ ...prev, view: 'player_lobby', currentRoomId: null }))}
+          playersList={room.players}
+           onExit={() => setAppState(prev => ({ ...prev, view: 'player_lobby', currentRoomId: null }))}
           onSendMessage={(text) => handleSendMessage(room.id, text)}
           onOpenProfile={() => setAppState(prev => ({ ...prev, view: 'profile' }))}
         />
@@ -560,6 +1042,7 @@ export default function App() {
           }))} 
           onLogout={() => setAppState(prev => ({ ...prev, view: 'home', currentUser: null, currentRoomId: null }))}
           onGoSettings={() => setAppState(prev => ({ ...prev, view: 'settings' }))}
+          onUpdateProfilePhoto={handleUpdateProfilePhoto}
         />
       </>
     );

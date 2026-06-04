@@ -1,21 +1,36 @@
 import React, { useState } from 'react';
 import { Room } from '../types';
-import { Plus, Users, Clock, Coins, Play, Trophy, Radio } from 'lucide-react';
+import { Plus, Users, Clock, Coins, Play, Trophy, Radio, ShieldAlert } from 'lucide-react';
 
 interface AdminRoomsProps {
   rooms: Room[];
-  onCreateRoom: (room: Partial<Room>) => void;
+  onCreateRoom: (room: Partial<Room & { botsEnabled?: boolean; maxBots?: number }>) => void;
   onEnterRoom: (roomId: string) => void;
   onDeleteRoom: (roomId: string) => void;
+  autoRoomEnabled: boolean;
+  autoRoomInterval: number;
+  onToggleAutoRoomEnabled: () => void;
+  onUpdateAutoRoomInterval: (val: number) => void;
 }
 
-export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: AdminRoomsProps) {
+export function AdminRooms({ 
+  rooms, 
+  onCreateRoom, 
+  onEnterRoom, 
+  onDeleteRoom,
+  autoRoomEnabled,
+  autoRoomInterval,
+  onToggleAutoRoomEnabled,
+  onUpdateAutoRoomInterval
+}: AdminRoomsProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [fee, setFee] = useState(10);
   const [prize, setPrize] = useState(100);
   const [bgMusicUrl, setBgMusicUrl] = useState('');
   const [onlineRadioUrl, setOnlineRadioUrl] = useState('');
+  const [botsEnabled, setBotsEnabled] = useState(false);
+  const [maxBots, setMaxBots] = useState(2);
   const [startTime, setStartTime] = useState(() => {
     const d = new Date(Date.now() + 5 * 60000);
     const z = (n: number) => n.toString().padStart(2, '0');
@@ -36,10 +51,14 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
       scheduledTime: new Date(startTime).getTime(),
       maxPlayers: 10,
       gameMode,
+      botsEnabled,
+      maxBots,
     });
     setNewName('');
     setBgMusicUrl('');
     setOnlineRadioUrl('');
+    setBotsEnabled(false);
+    setMaxBots(2);
     setShowCreate(false);
   };
 
@@ -57,6 +76,50 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
           <Plus className="w-5 h-5"/>
           Nova Sala
         </button>
+      </div>
+
+      {/* 🤖 Configuração Global de Criação Automática de Salas */}
+      <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-5 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="bg-indigo-100 dark:bg-indigo-950/50 p-3 rounded-2xl text-indigo-600 dark:text-indigo-400">
+            <Plus className="w-5 h-5 animate-pulse" />
+          </div>
+          <div className="text-left">
+            <h3 className="font-extrabold text-slate-800 dark:text-white text-sm md:text-base">Criação Automática de Salas</h3>
+            <p className="text-slate-550 dark:text-slate-400 text-xs font-semibold">Cria novas salas agendadas contendo 2 bots participantes por padrão.</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-4 bg-white dark:bg-slate-950 p-2 rounded-2xl border border-slate-200/60 dark:border-slate-850 w-full md:w-auto justify-between md:justify-start">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 pl-2">Inicia em:</span>
+            <select 
+              value={autoRoomInterval} 
+              onChange={e => onUpdateAutoRoomInterval(Number(e.target.value))}
+              disabled={!autoRoomEnabled}
+              className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-1 text-xs font-black text-indigo-600 dark:text-indigo-400 outline-none disabled:opacity-40"
+            >
+              <option value="1">1 Minuto</option>
+              <option value="2">2 Minutos</option>
+              <option value="5">5 Minutos</option>
+              <option value="10">10 Minutos</option>
+              <option value="15">15 Minutos</option>
+              <option value="30">30 Minutos</option>
+            </select>
+          </div>
+          
+          <button 
+            type="button"
+            onClick={() => onToggleAutoRoomEnabled()}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+              autoRoomEnabled 
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700' 
+                : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-350 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+            }`}
+          >
+            {autoRoomEnabled ? 'Ativo' : 'Inativo'}
+          </button>
+        </div>
       </div>
 
       {showCreate && (
@@ -122,10 +185,43 @@ export function AdminRooms({ rooms, onCreateRoom, onEnterRoom, onDeleteRoom }: A
                    <option value="full_card">Cartela Cheia</option>
                    <option value="line">Linha (Vertical/Horizontal)</option>
                    <option value="block_of_4">4 Números Próximos (Bloco 2x2)</option>
-                 </select>
-               </div>
-             </div>
-           <button type="submit" disabled={!newName.trim()} className="w-full bg-slate-800 hover:bg-slate-900 text-white p-4 rounded-xl font-bold transition-colors disabled:opacity-50">
+                  </select>
+
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
+                    <h4 className="font-extrabold text-xs text-slate-500 uppercase tracking-wider mb-2">🤖 Bots na Sala (Até 5)</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <label className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl cursor-pointer hover:bg-slate-105 active:scale-95 transition-all">
+                        <input 
+                          type="checkbox" 
+                          checked={botsEnabled} 
+                          onChange={(e) => setBotsEnabled(e.target.checked)}
+                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer" 
+                        />
+                        <div className="flex flex-col select-none">
+                          <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Ativar Bots</span>
+                          <span className="text-[10px] text-slate-500">Nesta rodada</span>
+                        </div>
+                      </label>
+                      {botsEnabled && (
+                        <div>
+                          <select 
+                            value={maxBots} 
+                            onChange={(e) => setMaxBots(Number(e.target.value))} 
+                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs text-slate-700 dark:text-slate-350"
+                          >
+                            <option value="1">1 Bot Ativo</option>
+                            <option value="2">2 Bots Ativos</option>
+                            <option value="3">3 Bots Ativos</option>
+                            <option value="4">4 Bots Ativos</option>
+                            <option value="5">5 Bots Ativos</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <button type="submit" disabled={!newName.trim()} className="w-full bg-slate-800 hover:bg-slate-900 text-white p-4 rounded-xl font-bold transition-colors disabled:opacity-50">
              Criar e Agendar
            </button>
         </form>

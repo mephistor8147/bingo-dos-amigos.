@@ -5,11 +5,12 @@ import { BingoCardData, BingoSpace, Message, GameMode } from '../types';
 import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { audioController } from '../audioUtils';
 import { toast } from 'react-hot-toast';
+import { isCardWinner } from '../utils';
 
 interface PlayerMobileViewProps {
   card: BingoCardData;
   drawnNumbers: number[];
-  user: { uid: string; name: string; coins: number; avatar?: string };
+  user: { uid: string; name: string; coins: number; avatar?: string; role?: 'player' | 'admin' };
   timeLeft: number; // in seconds
   scheduledTime?: number;
   messages: Message[];
@@ -26,6 +27,7 @@ interface PlayerMobileViewProps {
   onOpenProfile?: () => void;
   winners?: { uid: string; name: string; avatar?: string }[];
   roomStatus?: 'waiting' | 'active' | 'finished';
+  playersList?: { id: string; name: string; card: BingoCardData }[];
 }
 
 const COLUMN_COLORS = [
@@ -57,7 +59,7 @@ const formatTime = (seconds: number) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus }: PlayerMobileViewProps) {
+export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList }: PlayerMobileViewProps) {
   // We'll mimic the "marked" state based on drawnNumbers for now, but a real app would let user tap.
   // Actually, standard digital bingo auto-daubs or user daubs. Let's make it auto-daub for simplicity,
   // or track clicked spaces. Let's track clicked spaces.
@@ -655,49 +657,140 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
           )}
         </div>
 
+        {/* Admin Participant Cards Miniature Section */}
+        {user.role === 'admin' && (
+          <div className="bg-white/95 dark:bg-slate-900 border border-indigo-400/30 dark:border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col gap-4 w-full mb-6 z-10 transition-all">
+            <h3 className="font-extrabold text-slate-805 dark:text-white text-base md:text-lg flex items-center gap-2">
+              <Award className="w-5 h-5 text-indigo-500 animate-pulse" />
+              <span>Cartelas dos Participantes ({playersList?.length || 0})</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 overflow-y-auto max-h-96 pr-2">
+              {playersList?.map(p => {
+                const isWinner = isCardWinner(p.card, drawnNumbers, gameMode);
+                return (
+                  <div key={p.id} className={`p-4 rounded-2xl border transition-all ${
+                    isWinner 
+                      ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-400 shadow-amber-500/10 shadow-lg' 
+                      : 'bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800'
+                  }`}>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate max-w-[70%]">{p.name}</span>
+                      {isWinner && (
+                        <span className="bg-amber-500 text-white font-black text-[9px] px-2 py-0.5 rounded-lg animate-bounce uppercase tracking-wider">
+                          🏆 BINGO!
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-5 gap-1 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+                      {p.card.grid.map((row, rIdx) =>
+                        row.map((cell, cIdx) => {
+                          const isFree = cell === 'FREE';
+                          const isMarked = isFree || drawnNumbers.includes(cell as number);
+                          return (
+                            <div
+                              key={`${rIdx}-${cIdx}`}
+                              className={`w-full aspect-square rounded-lg flex items-center justify-center text-[9px] sm:text-xs font-black transition-all ${
+                                isFree
+                                  ? 'bg-yellow-101 border border-amber-300 text-amber-700'
+                                  : isMarked
+                                  ? 'bg-emerald-500 text-white border border-emerald-600'
+                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-350 border border-slate-100 dark:border-slate-750'
+                              }`}
+                            >
+                              {isFree ? 'F' : cell}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {(!playersList || playersList.length === 0) && (
+                <div className="col-span-full text-center text-slate-400 dark:text-slate-505 font-bold py-8 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 px-4">
+                  Nenhum jogador na sala ainda.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Drawn Balls Animation Stage */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="flex items-center gap-1 h-24 sm:h-28 px-2 justify-center w-full">
-            <AnimatePresence>
-             {recentDrawn.map((num, i) => (
-                <motion.div
-                  key={`${num}-${i}`}
-                  initial={i === 0 ? { scale: 0, x: -50, opacity: 0 } : { x: -20, opacity: 0 }}
-                  animate={i === 0 ? { 
-                    scale: [1, 1.15, 1],
-                    borderColor: ['rgba(255,255,255,0.5)', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.5)'],
-                    boxShadow: [
-                      '0 0 0 0 rgba(255, 255, 255, 0.4), inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)',
-                      '0 0 0 12px rgba(255, 255, 255, 0), inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)',
-                      '0 0 0 0 rgba(255, 255, 255, 0), inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)'
-                    ]
-                  } : { scale: 0.8, x: 0, opacity: 0.9 }}
-                  transition={i === 0 ? {
-                    scale: { repeat: Infinity, duration: 1.5, ease: "easeInOut" },
-                    borderColor: { repeat: Infinity, duration: 1.5, ease: "easeInOut" },
-                    boxShadow: { repeat: Infinity, duration: 1.5, ease: "easeInOut" }
-                  } : { duration: 0.3 }}
-                  className={`rounded-full flex items-center justify-center font-black shadow-lg shadow-black/20 ${getColumnColor(num)} ${
-                    i === 0 
-                      ? 'w-20 h-20 text-4xl sm:w-24 sm:h-24 sm:text-5xl border-4 border-white/50 border-dashed z-10 relative animate-pulse' 
-                      : 'w-14 h-14 text-2xl sm:w-16 sm:h-16 sm:text-3xl border-2 border-white/30 z-0'
-                  }`}
-                  style={{
-                    boxShadow: 'inset -3px -3px 8px rgba(0,0,0,0.2), inset 2px 2px 5px rgba(255,255,255,0.4)',
-                  }}
-                >
-                  <span className="drop-shadow-sm">{num}</span>
-                  {i === 0 && (
-                    <span className="absolute -inset-1.5 rounded-full border-4 border-white/40 animate-ping pointer-events-none" />
-                  )}
-                </motion.div>
-             ))}
-           </AnimatePresence>
-           {recentDrawn.length === 0 && (
-              <div className="text-emerald-100/50 font-bold tracking-widest uppercase text-sm mt-4">Nenhuma bola sorteada</div>
-           )}
+        <div className="flex flex-col items-center mb-6 bg-slate-105/50 dark:bg-slate-900/60 p-4 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-inner max-w-md mx-auto w-full">
+          <span className="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2 select-none">Painel de Sorteio</span>
+          <div className="flex items-center gap-4 h-28 justify-center w-full relative">
+            <AnimatePresence mode="popLayout">
+              {recentDrawn.map((num, i) => {
+                const letter = num <= 15 ? 'B' : num <= 30 ? 'I' : num <= 45 ? 'N' : num <= 60 ? 'G' : 'O';
+                const isCurrent = i === 0;
+                let colorClass = 'from-red-500 to-red-600 text-white';
+                if (num > 15 && num <= 30) colorClass = 'from-purple-500 to-purple-600 text-white';
+                else if (num > 30 && num <= 45) colorClass = 'from-amber-400 to-amber-500 text-slate-905';
+                else if (num > 45 && num <= 60) colorClass = 'from-emerald-500 to-emerald-600 text-white';
+                else if (num > 60) colorClass = 'from-sky-500 to-sky-600 text-white';
+
+                return (
+                  <motion.div
+                    key={`${num}-${i}`}
+                    initial={isCurrent ? { scale: 0.1, y: 30, opacity: 0, rotate: -45 } : { scale: 0.7, opacity: 0 }}
+                    animate={isCurrent ? { 
+                      scale: 1.1, 
+                      y: 0, 
+                      opacity: 1, 
+                      rotate: 0,
+                      boxShadow: '0 12px 20px -3px rgba(0, 0, 0, 0.3), 0 4px 8px -2px rgba(0, 0, 0, 0.2)'
+                    } : { 
+                      scale: 0.75, 
+                      y: 0, 
+                      opacity: 0.85,
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                    }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={isCurrent ? { type: "spring", stiffness: 220, damping: 14 } : { duration: 0.35 }}
+                    className={`rounded-full flex flex-col items-center justify-center font-black relative overflow-hidden select-none border-b-4 border-black/25 ${
+                      isCurrent 
+                        ? `w-20 h-20 sm:w-22 sm:h-22 text-slate-900 bg-gradient-to-br ${colorClass} z-20 border-t-2 border-white/50 ring-4 ring-indigo-500/20` 
+                        : `w-12 h-12 sm:w-14 sm:h-14 text-slate-800 bg-gradient-to-br ${colorClass} z-10 border-t border-white/30 opacity-75`
+                    }`}
+                  >
+                    {/* Glossy Overlay Highlight */}
+                    <div className="absolute top-1 left-1.5 right-1.5 h-1/2 bg-gradient-to-b from-white/35 via-white/10 to-transparent rounded-t-full pointer-events-none" />
+                    
+                    {/* 3D Ball Content */}
+                    <div className="flex flex-col items-center justify-center leading-none select-none z-10">
+                      {isCurrent ? (
+                        <>
+                          <span className={`text-[10px] sm:text-xs font-black tracking-wider uppercase opacity-85`}>
+                            {letter}
+                          </span>
+                          <span className="text-3xl sm:text-4xl font-black mt-0.5 filter drop-shadow-sm">
+                            {num}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-base sm:text-lg font-black filter drop-shadow-sm">
+                          {letter}-{num}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Bottom internal shadow */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
+
+                    {/* Ping/Ring aura for current ball */}
+                    {isCurrent && (
+                      <span className="absolute -inset-1 rounded-full border border-indigo-505 animate-pulse opacity-40 pointer-events-none" />
+                    )}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+            
+            {recentDrawn.length === 0 && (
+              <div className="text-slate-400 dark:text-slate-500 font-bold tracking-widest uppercase text-xs animate-pulse">Aguardando sorteio...</div>
+            )}
+          </div>
         </div>
-      </div>
 
         {/* Spectator Warning Banner */}
         {isSpectator && (

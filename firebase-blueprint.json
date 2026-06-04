@@ -52,6 +52,15 @@
           ]
         }
       ]
+    },
+    {
+      "name": "settings",
+      "description": "Global administrator and automation configurations",
+      "documentId": "settingId",
+      "fields": [
+        { "name": "enabled", "type": "boolean" },
+        { "name": "intervalMinutes", "type": "number" }
+      ]
     }
   ]
 }

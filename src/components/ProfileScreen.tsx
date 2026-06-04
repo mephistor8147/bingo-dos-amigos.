@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { User, LogOut, ArrowLeft, Coins, TrendingUp, Download, Upload, Settings } from 'lucide-react';
 
 interface ProfileScreenProps {
@@ -6,39 +6,93 @@ interface ProfileScreenProps {
   onGoBack: () => void;
   onLogout: () => void;
   onGoSettings?: () => void;
+  onUpdateProfilePhoto?: (photoURL: string) => void;
 }
 
-export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings }: ProfileScreenProps) {
+export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings, onUpdateProfilePhoto }: ProfileScreenProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Mock function to show an alert for transaction buttons
   const handleTransaction = (type: string) => {
     alert(`Funcionalidade de ${type} estará disponível em breve!`);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 600 * 1024) {
+      alert("A imagem deve ter no máximo 600KB para ser salva.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      if (onUpdateProfilePhoto) {
+        onUpdateProfilePhoto(base64String);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors flex flex-col items-center py-10 px-4">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl overflow-hidden border border-slate-100 dark:border-slate-800 transition-colors">
         
-        {/* Header styling like a banner */}
-        <div className="bg-emerald-500 p-6 relative">
-          <button 
-             onClick={onGoBack} 
-             className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all"
-          >
-             <ArrowLeft className="w-5 h-5" />
-          </button>
-          
-          <div className="flex flex-col items-center mt-4">
-            <div className="w-24 h-24 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center border-4 border-emerald-300 overflow-hidden mb-3 shadow">
-               {user.photoURL ? (
-                 <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
-               ) : (
-                 <User className="w-12 h-12 text-slate-300" />
-               )}
+        {/* Unified Profile Card Header at the Top */}
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 relative">
+          {/* Header Action Bar */}
+          <div className="flex items-center justify-between w-full mb-4">
+            <button 
+               onClick={onGoBack} 
+               className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold text-xs transition-all pointer-events-auto"
+            >
+               <ArrowLeft className="w-4 h-4" />
+               <span>Voltar</span>
+            </button>
+            <span className="text-[10px] font-black tracking-widest text-emerald-100 uppercase bg-black/10 px-2.5 py-1.5 rounded-lg select-none">Meu Perfil</span>
+          </div>
+
+          <div className="flex flex-col items-center">
+            {/* Unified Photo Frame with hover uploads */}
+            <div className="relative group">
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-24 h-24 bg-white dark:bg-slate-800 rounded-full flex items-center justify-center border-4 border-emerald-300 overflow-hidden shadow-lg cursor-pointer hover:scale-105 active:scale-95 transition-all"
+                title="Clique para alterar a foto do perfil"
+              >
+                 {user.photoURL ? (
+                   <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                 ) : (
+                   <User className="w-12 h-12 text-slate-300 pointer-events-none" />
+                 )}
+                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-black uppercase tracking-wider text-center px-1 rounded-full select-none">
+                   Alterar Foto
+                 </div>
+              </div>
+              
+              {/* Upload badge floating directly attached to the photo circle inside the card */}
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute -bottom-1.5 -right-1.5 p-2 bg-amber-500 hover:bg-amber-600 border border-amber-400 text-white rounded-full shadow-md active:scale-95 transition-all cursor-pointer flex items-center justify-center"
+                title="Upload de foto de perfil"
+              >
+                <Upload className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <h2 className="text-2xl font-black text-white text-center leading-tight">
+
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+            />
+            <h2 className="text-2xl font-black text-white text-center leading-tight mt-4">
               {user.name}
             </h2>
-            <p className="text-emerald-100 font-bold text-sm tracking-wide mt-1">CPF: {user.cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') || 'N/A'}</p>
+            <p className="text-emerald-100 font-extrabold text-xs tracking-wider uppercase mt-1">CPF: {user.cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4') || 'N/A'}</p>
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Room, AppState } from '../types';
 import { Users, Clock, Coins, UserCircle2, Trophy } from 'lucide-react';
-import { generateBingoCard } from '../utils';
+import { generateBingoCard, isCardWinner } from '../utils';
 
 interface PlayerLobbyProps {
   appState: AppState;
@@ -42,8 +42,17 @@ export function PlayerLobby({ appState, onJoinRoom, onEnterRoom, onOpenProfile }
           const isFull = room.players.length >= room.maxPlayers;
           const canJoin = !isJoined && !isFull && user.coins >= room.entryFee;
 
+          const userParticipant = room.players.find(p => p.id === user.uid);
+          const hasWon = userParticipant ? isCardWinner(userParticipant.card, room.drawnNumbers, room.gameMode) : false;
+
           return (
-            <div key={room.id} className="bg-white dark:bg-slate-900 rounded-3xl shadow-md border border-slate-100 dark:border-slate-800 p-6 flex flex-col justify-between hover:shadow-lg dark:hover:shadow-black/20 transition-all bg-gradient-to-br from-white to-emerald-50/10 dark:from-slate-900 dark:to-slate-900/50">
+            <div key={room.id} className="bg-white dark:bg-slate-900 rounded-3xl shadow-md border border-slate-100 dark:border-slate-800 p-6 flex flex-col justify-between hover:shadow-lg dark:hover:shadow-black/20 transition-all bg-gradient-to-br from-white to-emerald-50/10 dark:from-slate-900 dark:to-slate-900/50 relative overflow-hidden">
+              {hasWon && (
+                <div className="bg-amber-500 text-white p-3 rounded-2xl mb-4 font-black text-center text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-md border border-amber-400">
+                  <Trophy className="w-5 h-5 text-yellow-200 fill-yellow-200 animate-bounce shrink-0 animate-none" />
+                  <span>VOCÊ GANHOU NESTA SALA! 🎉</span>
+                </div>
+              )}
               <div className="flex justify-between items-start mb-4 gap-2">
                 <div>
                   <h4 className="font-black text-xl text-slate-800 dark:text-white line-clamp-1">{room.name}</h4>
@@ -75,7 +84,14 @@ export function PlayerLobby({ appState, onJoinRoom, onEnterRoom, onOpenProfile }
                   {room.players.length} / {room.maxPlayers} Ativos
                 </div>
 
-                {isJoined ? (
+                {user.role === 'admin' ? (
+                  <button 
+                    onClick={() => onEnterRoom(room.id)}
+                    className="bg-indigo-650 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black transition-all shadow-lg shadow-indigo-650/20 active:scale-95 text-xs md:text-sm"
+                  >
+                    Entrar (Admin)
+                  </button>
+                ) : isJoined ? (
                   <button 
                     onClick={() => onEnterRoom(room.id)}
                     className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-emerald-500/20 active:scale-95 text-xs md:text-sm"
@@ -111,12 +127,12 @@ export function PlayerLobby({ appState, onJoinRoom, onEnterRoom, onOpenProfile }
                         ) : (
                           <div className="flex items-center gap-3">
                             <button 
-                              onClick={() => {
-                                const newCard = generateBingoCard(Math.random().toString(36).substring(2, 8).toUpperCase(), user.name);
-                                onJoinRoom(room.id, newCard);
-                              }}
-                              disabled={isFull}
-                              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 text-xs md:text-sm"
+                               onClick={() => {
+                                 const newCard = generateBingoCard(Math.random().toString(36).substring(2, 8).toUpperCase(), user.name);
+                                 onJoinRoom(room.id, newCard);
+                               }}
+                               disabled={isFull}
+                               className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95 text-xs md:text-sm"
                             >
                               {isFull ? 'Lotada' : 'Comprar'}
                             </button>
@@ -141,3 +157,4 @@ export function PlayerLobby({ appState, onJoinRoom, onEnterRoom, onOpenProfile }
     </div>
   );
 }
+
