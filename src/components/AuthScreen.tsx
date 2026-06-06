@@ -16,6 +16,7 @@ interface AuthScreenProps {
 }
 
 export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
+  const loginIllustration = new URL('../assets/images/login_illustration_1780710914633.png', import.meta.url).href;
   const [isLogin, setIsLogin] = useState(true);
   
   // Registration / Login fields
@@ -47,7 +48,7 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
               email: userCredential.user.email || '',
               photoURL: userCredential.user.photoURL || '',
               role: autoAdmin,
-              coins: autoAdmin === 'admin' ? 0 : 4000
+              coins: autoAdmin === 'admin' ? 0 : 500
             };
             await setDoc(userRef, userData);
           } else {
@@ -91,7 +92,7 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
           onLoginSuccess({
             uid: userCredential.user.uid,
             name: 'Jogador',
-            coins: 4000,
+            coins: 500,
             role: 'player'
           }, 'player');
         }
@@ -109,7 +110,7 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
           email,
           phone,
           photoURL,
-          coins: 4000,
+          coins: 500,
           role: 'player'
         };
         await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
@@ -169,7 +170,7 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
           email: userCredential.user.email || '',
           photoURL: userCredential.user.photoURL || '',
           role: autoAdmin,
-          coins: autoAdmin === 'admin' ? 0 : 4000
+          coins: autoAdmin === 'admin' ? 0 : 500
         };
         await setDoc(userRef, userData);
       } else {
@@ -193,6 +194,16 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
           >
             Voltar
           </button>
+
+          <div className="w-full h-44 mb-6 rounded-2xl overflow-hidden relative border border-slate-100 shadow-sm bg-slate-50 flex items-center justify-center">
+             <img 
+               src={loginIllustration} 
+               alt="Bingo Live" 
+               referrerPolicy="no-referrer"
+               className="w-full h-full object-cover"
+             />
+          </div>
+
           <h2 className="text-3xl font-black text-slate-800 mb-6">
             {isLogin ? 'Login' : 'Cadastro'}
           </h2>

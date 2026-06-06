@@ -118,7 +118,7 @@ export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings, onUpdate
           <div className="grid grid-cols-2 gap-4">
             <button 
               onClick={() => handleTransaction('Depósito')}
-              className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors shadow-sm"
+              className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
             >
                <div className="bg-blue-100 dark:bg-blue-950/40 p-3 rounded-full text-blue-600 dark:text-blue-400">
                  <Upload className="w-6 h-6" />
@@ -127,7 +127,7 @@ export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings, onUpdate
             </button>
             <button 
                 onClick={() => handleTransaction('Saque')}
-                className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors shadow-sm"
+                className="bg-white dark:bg-slate-900 border dark:border-slate-800 rounded-2xl p-4 flex flex-col items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm"
             >
                 <div className="bg-emerald-100 dark:bg-emerald-950/40 p-3 rounded-full text-emerald-600 dark:text-emerald-450">
                   <Download className="w-6 h-6" />
@@ -137,23 +137,23 @@ export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings, onUpdate
           </div>
 
           {/* User Details */}
-          <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-850 space-y-3">
+          <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 space-y-3">
              <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Informações de Cadastro</h3>
              <div className="flex justify-between border-b border-slate-200/50 dark:border-slate-800 pb-2">
                  <span className="text-slate-500 dark:text-slate-400 font-medium text-sm">E-mail</span>
-                 <span className="text-slate-850 dark:text-slate-100 font-bold text-sm text-right line-clamp-1">{user.email || 'Não informado'}</span>
+                 <span className="text-slate-800 dark:text-slate-100 font-bold text-sm text-right line-clamp-1">{user.email || 'Não informado'}</span>
              </div>
              <div className="flex justify-between border-b border-slate-200/50 dark:border-slate-800 pb-2">
                  <span className="text-slate-500 dark:text-slate-400 font-medium text-sm">Telefone</span>
-                 <span className="text-slate-850 dark:text-slate-100 font-bold text-sm">{user.phone || 'Não informado'}</span>
+                 <span className="text-slate-800 dark:text-slate-100 font-bold text-sm">{user.phone || 'Não informado'}</span>
              </div>
           </div>
 
           {/* Win History Mock */}
-          <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-850">
+          <div className="bg-slate-50 dark:bg-slate-950/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
              <div className="flex items-center gap-2 mb-3">
                <TrendingUp className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-               <h3 className="text-xs font-black text-slate-750 dark:text-slate-350 uppercase tracking-widest">Histórico de Ganhos</h3>
+               <h3 className="text-xs font-black text-slate-700 dark:text-slate-400 uppercase tracking-widest">Histórico de Ganhos</h3>
              </div>
              <div className="text-center text-slate-400 dark:text-slate-500 py-4 font-medium text-sm">
                Nenhuma vitória registrada. Continue jogando!
@@ -163,7 +163,7 @@ export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings, onUpdate
           {onGoSettings && (
              <button 
                 onClick={onGoSettings}
-                className="w-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold p-4 rounded-xl flex items-center justify-center gap-2 transition-colors mt-2"
+                className="w-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-bold p-4 rounded-xl flex items-center justify-center gap-2 transition-colors mt-2"
              >
                 <Settings className="w-5 h-5 text-slate-400" />
                 Configurações
@@ -173,7 +173,7 @@ export function ProfileScreen({ user, onGoBack, onLogout, onGoSettings, onUpdate
           {/* Logout */}
           <button 
              onClick={onLogout}
-             className="w-full bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-955 text-red-600 dark:text-red-400 font-bold p-4 rounded-xl flex items-center justify-center gap-2 transition-colors mt-4 border border-red-200/20"
+             className="w-full bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 font-bold p-4 rounded-xl flex items-center justify-center gap-2 transition-colors mt-4 border border-red-200/20"
           >
              <LogOut className="w-5 h-5" />
              Sair da Conta

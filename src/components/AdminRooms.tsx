@@ -1,21 +1,40 @@
 import React, { useState } from 'react';
 import { Room } from '../types';
-import { Plus, Users, Clock, Coins, Play, Trophy, Radio, ShieldAlert, Edit3 } from 'lucide-react';
+import { Plus, Users, Clock, Coins, Play, Trophy, Radio, ShieldAlert, Edit3, Image as ImageIcon } from 'lucide-react';
 
 interface AdminRoomsProps {
   rooms: Room[];
   onCreateRoom: (room: Partial<Room & { botsEnabled?: boolean; maxBots?: number }>) => void;
   onEnterRoom: (roomId: string) => void;
   onDeleteRoom: (roomId: string) => void;
-  onUpdateRoomSettings?: (roomId: string, name: string, botsEnabled: boolean, maxBots: number) => void;
+  onUpdateRoomSettings?: (roomId: string, name: string, botsEnabled: boolean, maxBots: number, backgroundImageUrl?: string, roomIcon?: string) => void;
   autoRoomEnabled: boolean;
   autoRoomInterval: number;
   autoRoomStartHour: string;
   autoRoomEndHour: string;
+  autoRoomRadioUrl: string;
   onToggleAutoRoomEnabled: () => void;
   onUpdateAutoRoomInterval: (val: number) => void;
   onUpdateAutoRoomHours: (start: string, end: string) => void;
+  onUpdateAutoRoomRadioUrl: (val: string) => void;
+  autoRoomBotsCount?: number;
+  autoRoomBaseName?: string;
+  autoRoomSequenceNumber?: number;
+  onUpdateAutoRoomBotsCount?: (val: number) => void;
+  onUpdateAutoRoomBaseName?: (val: string) => void;
+  onUpdateAutoRoomSequenceNumber?: (val: number) => void;
 }
+
+const PRESET_ICONS = ['🎉', '🏆', '💎', '🍀', '🔥', '🤖', '⭐', '🚀', '👑', '🃏', '🍒', '🎨', '🎵', '🎪', '🎰'];
+
+const PRESET_BACKGROUNDS = [
+  { name: 'Padrão Slate', value: '' },
+  { name: 'Cosmic Purple (Galáxia)', value: 'https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?auto=format&fit=crop&q=80&w=800' },
+  { name: 'Midnight Neon Blue (Neon)', value: 'https://images.unsplash.com/photo-1543536448-d209d2d13a1c?auto=format&fit=crop&q=80&w=800' },
+  { name: 'Sertanejo Festivo (Madeira)', value: 'https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&q=80&w=800' },
+  { name: 'Golden Premium (Luxo)', value: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&q=80&w=800' },
+  { name: 'Emerald Forest (Floresta)', value: 'https://images.unsplash.com/photo-1511497584788-876760111969?auto=format&fit=crop&q=80&w=800' }
+];
 
 export function AdminRooms({ 
   rooms, 
@@ -27,20 +46,33 @@ export function AdminRooms({
   autoRoomInterval,
   autoRoomStartHour,
   autoRoomEndHour,
+  autoRoomRadioUrl,
   onToggleAutoRoomEnabled,
   onUpdateAutoRoomInterval,
-  onUpdateAutoRoomHours
+  onUpdateAutoRoomHours,
+  onUpdateAutoRoomRadioUrl,
+  autoRoomBotsCount,
+  autoRoomBaseName,
+  autoRoomSequenceNumber,
+  onUpdateAutoRoomBotsCount,
+  onUpdateAutoRoomBaseName,
+  onUpdateAutoRoomSequenceNumber
  }: AdminRoomsProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [editName, setEditName] = useState('');
   const [editBotsEnabled, setEditBotsEnabled] = useState(false);
   const [editMaxBots, setEditMaxBots] = useState(2);
+  const [editBgImage, setEditBgImage] = useState('');
+  const [editIcon, setEditIcon] = useState('🎉');
+  
   const [newName, setNewName] = useState('');
   const [fee, setFee] = useState(10);
   const [prize, setPrize] = useState(100);
   const [bgMusicUrl, setBgMusicUrl] = useState('');
   const [onlineRadioUrl, setOnlineRadioUrl] = useState('');
+  const [roomBgImage, setRoomBgImage] = useState('');
+  const [roomIcon, setRoomIcon] = useState('🎉');
   const [botsEnabled, setBotsEnabled] = useState(false);
   const [maxBots, setMaxBots] = useState(2);
   const [startTime, setStartTime] = useState(() => {
@@ -48,7 +80,7 @@ export function AdminRooms({
     const z = (n: number) => n.toString().padStart(2, '0');
     return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`;
   });
-  const [gameMode, setGameMode] = useState<'full_card' | 'line' | 'block_of_4'>('full_card');
+  const [gameMode, setGameMode] = useState<'full_card' | 'line' | 'block_of_4' | 'bot_vs_bot'>('full_card');
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +92,8 @@ export function AdminRooms({
       prize,
       bgMusicUrl: bgMusicUrl.trim() || undefined,
       onlineRadioUrl: onlineRadioUrl.trim() || undefined,
+      backgroundImageUrl: roomBgImage.trim() || undefined,
+      roomIcon: roomIcon,
       scheduledTime: new Date(startTime).getTime(),
       maxPlayers: 10,
       gameMode,
@@ -69,6 +103,8 @@ export function AdminRooms({
     setNewName('');
     setBgMusicUrl('');
     setOnlineRadioUrl('');
+    setRoomBgImage('');
+    setRoomIcon('🎉');
     setBotsEnabled(false);
     setMaxBots(2);
     setShowCreate(false);
@@ -91,7 +127,7 @@ export function AdminRooms({
       </div>
 
       {/* 🤖 Configuração Global de Criação Automática de Salas */}
-      <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-850 rounded-3xl p-6 mb-8 space-y-4">
+      <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 mb-8 space-y-4">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="bg-indigo-100 dark:bg-indigo-950/50 p-3 rounded-2xl text-indigo-600 dark:text-indigo-400">
@@ -99,7 +135,7 @@ export function AdminRooms({
             </div>
             <div className="text-left">
               <h3 className="font-extrabold text-slate-800 dark:text-white text-sm md:text-base">Criação Automática de Salas</h3>
-              <p className="text-slate-550 dark:text-slate-450 text-xs font-semibold">Cria novas salas agendadas contendo 2 bots participantes por padrão.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold">Cria novas salas agendadas contendo 2 bots participantes por padrão.</p>
             </div>
           </div>
           
@@ -109,7 +145,7 @@ export function AdminRooms({
             className={`w-full md:w-auto px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
               autoRoomEnabled 
                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700' 
-                : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-350 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
+                : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
             }`}
           >
             {autoRoomEnabled ? 'Ativo' : 'Inativo'}
@@ -119,13 +155,13 @@ export function AdminRooms({
         {/* Subconfigurações de Agendamento */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/80">
           {/* Intervalo */}
-          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-250/20 dark:border-slate-850 flex flex-col justify-between gap-1.5 shadow-sm">
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Intervalo de Criação</span>
             <select 
               value={autoRoomInterval} 
               onChange={e => onUpdateAutoRoomInterval(Number(e.target.value))}
               disabled={!autoRoomEnabled}
-              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-indigo-600 dark:text-indigo-450 outline-none disabled:opacity-40"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-indigo-600 dark:text-indigo-400 outline-none disabled:opacity-40"
             >
               <option value="1">1 Minuto</option>
               <option value="2">2 Minutos</option>
@@ -137,7 +173,7 @@ export function AdminRooms({
           </div>
 
           {/* Horário de Início */}
-          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-250/20 dark:border-slate-850 flex flex-col justify-between gap-1.5 shadow-sm">
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Início do Funcionamento (Diário)</span>
             <input 
               type="time" 
@@ -149,7 +185,7 @@ export function AdminRooms({
           </div>
 
           {/* Horário de Fim */}
-          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-250/20 dark:border-slate-850 flex flex-col justify-between gap-1.5 shadow-sm">
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fim do Funcionamento (Diário)</span>
             <input 
               type="time" 
@@ -159,6 +195,99 @@ export function AdminRooms({
               className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none disabled:opacity-40 cursor-text"
             />
           </div>
+        </div>
+
+        {/* Configurações Extra de Criação Automática (Quantidade de Bots, Prefixo, Sequencial) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/80">
+          {/* Prefixo / Base Name */}
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prefixo do Nome da Sala</span>
+            <input 
+              type="text" 
+              value={autoRoomBaseName ?? "Sala do Milhão"}
+              onChange={e => onUpdateAutoRoomBaseName && onUpdateAutoRoomBaseName(e.target.value)}
+              disabled={!autoRoomEnabled}
+              placeholder="Ex: Sala do Milhão"
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none disabled:opacity-40 cursor-text"
+            />
+          </div>
+
+          {/* Quantidade de Bots */}
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mínimo de Bots na Sala</span>
+            <input 
+              type="number" 
+              min="0"
+              max="15"
+              value={autoRoomBotsCount ?? 2}
+              onChange={e => onUpdateAutoRoomBotsCount && onUpdateAutoRoomBotsCount(Number(e.target.value))}
+              disabled={!autoRoomEnabled}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none disabled:opacity-40"
+            />
+          </div>
+
+          {/* Próximo Sequencial */}
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm font-semibold">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sequencial da Próxima Sala</span>
+            <div className="flex gap-2 w-full">
+              <input 
+                type="number" 
+                min="1"
+                value={autoRoomSequenceNumber ?? 1}
+                onChange={e => onUpdateAutoRoomSequenceNumber && onUpdateAutoRoomSequenceNumber(Number(e.target.value))}
+                disabled={!autoRoomEnabled}
+                className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none disabled:opacity-40"
+              />
+              <button
+                type="button"
+                onClick={() => onUpdateAutoRoomSequenceNumber && onUpdateAutoRoomSequenceNumber(1)}
+                disabled={!autoRoomEnabled}
+                className="px-3 py-2 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl font-bold text-[10px] uppercase hover:bg-red-200 dark:hover:bg-red-900/50 disabled:opacity-40 transition-colors shrink-0"
+                title="Resetar para 01"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Rádio Online para Salas Automáticas */}
+        <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/80 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-left">
+            <div>
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Rádio Online Automática (Streaming)</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Toca por padrão nas salas criadas automaticamente.</span>
+            </div>
+            <select
+              onChange={(e) => onUpdateAutoRoomRadioUrl(e.target.value)}
+              value={autoRoomRadioUrl}
+              disabled={!autoRoomEnabled}
+              className="bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 p-2 px-3 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer border border-slate-200 dark:border-slate-800 w-full sm:w-auto disabled:opacity-40"
+            >
+              <option value="">-- Sem rádio --</option>
+              <option value="https://live.hunter.fm/sertanejo_stream?ag=mp3">Sertanejo</option>
+              <option value="https://live.hunter.fm/pop_stream?ag=mp3">Pop</option>
+              <option value="https://live.hunter.fm/pagode_stream?ag=mp3">Pagode</option>
+              <option value="https://live.hunter.fm/rock_stream?ag=mp3">Rook</option>
+              <option value="https://live.hunter.fm/master_stream?ag=mp3">Master</option>
+              <option value="https://live.hunter.fm/mpb_stream?ag=mp3">Mpb</option>
+              <option value="https://live.hunter.fm/gospel_stream?ag=mp3">Gostei</option>
+              <option value="https://live.hunter.fm/hitsbrasil_stream?ag=mp3">Hits Brasil</option>
+              <option value="https://live.hunter.fm/pop2k_stream?ag=mp3">Pop 2k</option>
+              <option value="https://live.hunter.fm/modasertaneja_stream?ag=mp3">Moda sertaneja</option>
+              <option value="https://live.hunter.fm/80s_stream?ag=mp3">80s</option>
+              <option value="https://live.hunter.fm/kpop_stream?ag=mp3">Kpop</option>
+              <option value="https://live.hunter.fm/pisadinha_stream?ag=mp3">Pisadinha</option>
+            </select>
+          </div>
+          <input 
+            type="text" 
+            value={autoRoomRadioUrl} 
+            onChange={e => onUpdateAutoRoomRadioUrl(e.target.value)} 
+            disabled={!autoRoomEnabled}
+            placeholder="URL direta de streaming de rádio (ex: https://dominio.com/streaming.mp3)" 
+            className="w-full bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs disabled:opacity-40" 
+          />
         </div>
       </div>
 
@@ -216,7 +345,7 @@ export function AdminRooms({
                    <select
                      onChange={(e) => setOnlineRadioUrl(e.target.value)}
                      value={onlineRadioUrl}
-                     className="bg-slate-105 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 p-1.5 px-3 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer border border-slate-200 dark:border-slate-700 w-full sm:w-auto"
+                     className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 p-1.5 px-3 rounded-xl font-bold text-xs focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer border border-slate-200 dark:border-slate-700 w-full sm:w-auto"
                    >
                      <option value="">-- Escolher Rádio Preset --</option>
                      <option value="https://live.hunter.fm/sertanejo_stream?ag=mp3">Sertanejo</option>
@@ -242,11 +371,88 @@ export function AdminRooms({
                    className="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold mb-4" 
                  />
  
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Ícone Temático da Sala</label>
+                 <div className="flex flex-wrap gap-2 mb-4 bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+                   {PRESET_ICONS.map(ic => (
+                     <button
+                       key={ic}
+                       type="button"
+                       onClick={() => setRoomIcon(ic)}
+                       className={`w-9 h-9 text-lg flex items-center justify-center rounded-xl transition-all hover:scale-110 active:scale-95 ${roomIcon === ic ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                     >
+                       {ic}
+                     </button>
+                   ))}
+                 </div>
+
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Imagem de Fundo da Sala</label>
+                 <div className="space-y-2 mb-4">
+                   <select 
+                     value={roomBgImage} 
+                     onChange={e => setRoomBgImage(e.target.value)} 
+                     className="w-full bg-slate-50 dark:bg-slate-800 text-slate-100 border border-slate-250 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                   >
+                     {PRESET_BACKGROUNDS.map(bg => (
+                       <option key={bg.value} value={bg.value}>{bg.name}</option>
+                     ))}
+                     <option value="custom">-- Utilizar URL Personalizada ou Arquivo --</option>
+                   </select>
+
+                   <div className="space-y-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                     <input 
+                       type="text" 
+                       value={roomBgImage} 
+                       onChange={e => setRoomBgImage(e.target.value)} 
+                       placeholder="Cole aqui uma URL de imagem de fundo (opcional)" 
+                       className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-150 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl placeholder-slate-400 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none" 
+                     />
+                     
+                     <div className="flex items-center gap-2">
+                       <span className="text-[10px] text-slate-400 font-bold uppercase">Ou envie um arquivo:</span>
+                       <label className="px-2.5 py-1 bg-slate-250 hover:bg-slate-300 dark:bg-slate-800 hover:dark:bg-slate-700 text-[10px] font-black text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer transition-all flex items-center gap-1">
+                         <ImageIcon className="w-3 h-3 text-slate-500" />
+                         Selecionar Imagem
+                         <input 
+                           type="file" 
+                           accept="image/*" 
+                           onChange={(e) => {
+                             const file = e.target.files?.[0];
+                             if (file) {
+                               const reader = new FileReader();
+                               reader.onload = () => {
+                                 if (reader.result) {
+                                   setRoomBgImage(reader.result as string);
+                                 }
+                               };
+                               reader.readAsDataURL(file);
+                             }
+                           }} 
+                           className="hidden" 
+                         />
+                       </label>
+                     </div>
+                     
+                     {roomBgImage && (
+                       <div className="flex items-center gap-2 pt-1 border-t border-slate-200/40 dark:border-slate-700 mt-2">
+                         <div className="w-20 h-10 rounded bg-cover bg-center border border-slate-200 dark:border-slate-700" style={{ backgroundImage: `url(${roomBgImage})` }}></div>
+                         <button 
+                           type="button" 
+                           onClick={() => setRoomBgImage('')} 
+                           className="text-[10px] font-extrabold text-red-500 hover:underline"
+                         >
+                           Remover Imagem
+                         </button>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+
                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Modo de Jogo</label>
                  <select value={gameMode} onChange={e=>setGameMode(e.target.value as any)} className="w-full bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold mb-4">
                    <option value="full_card">Cartela Cheia</option>
                    <option value="line">Linha (Vertical/Horizontal)</option>
                    <option value="block_of_4">4 Números Próximos (Bloco 2x2)</option>
+                   <option value="bot_vs_bot">Bot vs Bot (Somente Bots)</option>
                   </select>
  
                   <div className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
@@ -269,7 +475,7 @@ export function AdminRooms({
                           <select 
                             value={maxBots} 
                             onChange={(e) => setMaxBots(Number(e.target.value))} 
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs text-slate-705 dark:text-slate-300 pointer-events-auto"
+                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs text-slate-800 dark:text-slate-250 pointer-events-auto"
                           >
                             <option value="1">1 Bot Ativo</option>
                             <option value="2">2 Bots Ativos</option>
@@ -291,116 +497,132 @@ export function AdminRooms({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {rooms.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-slate-400 font-medium bg-white/50 border-2 border-dashed border-slate-200 rounded-3xl">Nenhuma sala criada.</div>
-        ) : rooms.map(room => (
-          <div key={room.id} className="bg-white rounded-3xl shadow-md border border-slate-100 p-6 flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h4 className="font-black text-xl text-slate-800">{room.name}</h4>
-                <div className="flex items-center gap-1.5 text-slate-500 text-sm font-medium mt-1">
-                  <Clock className="w-4 h-4"/>
-                  {new Date(room.scheduledTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+          <div className="col-span-full py-16 text-center text-slate-400 font-medium bg-white/50 dark:bg-slate-900/40 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl">Nenhuma sala criada.</div>
+        ) : (
+          rooms.map(room => (
+            <div 
+              key={room.id} 
+              className="bg-white dark:bg-slate-900 rounded-3xl shadow-md border border-slate-200/50 dark:border-slate-800 p-6 flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-xl text-slate-800 dark:text-slate-100"
+            >
+              {room.backgroundImageUrl && (
+                <img 
+                  src={room.backgroundImageUrl} 
+                  alt="" 
+                  referrerPolicy="no-referrer"
+                  className="absolute inset-0 w-full h-full object-cover opacity-[0.06] dark:opacity-15 pointer-events-none z-0 mix-blend-overlay"
+                />
+              )}
+              <div className="flex justify-between items-start mb-4 relative z-10">
+                <div>
+                  <h4 className="font-black text-xl text-slate-800 dark:text-white flex items-center gap-2.5">
+                    <span className="text-2xl bg-white dark:bg-slate-800 w-10 h-10 flex items-center justify-center rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 shrink-0">{room.roomIcon || '🎉'}</span>
+                    <span className="truncate">{room.name}</span>
+                  </h4>
+                  <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-sm font-medium mt-2">
+                    <Clock className="w-4 h-4"/>
+                    {new Date(room.scheduledTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </div>
+                  <div className="text-xs font-bold text-slate-400 mt-1 uppercase flex flex-col gap-1.5">
+                    <span>Modo: {room.gameMode === 'full_card' ? 'Cartela Cheia' : room.gameMode === 'line' ? 'Linha' : room.gameMode === 'bot_vs_bot' ? 'Bot vs Bot' : '4 Cantos'}</span>
+                    {room.onlineRadioUrl && (
+                      <div className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-150/40 text-[10px] font-black uppercase inline-flex items-center gap-1.5 mt-1 shadow-sm w-fit">
+                        <Radio className="w-3.5 h-3.5 animate-pulse text-indigo-500" />
+                        Rádio Online
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs font-bold text-slate-400 mt-1 uppercase">
-                  Modo: {room.gameMode === 'full_card' ? 'Cartela Cheia' : room.gameMode === 'line' ? 'Linha' : '4 Cantos'}
-                  {room.onlineRadioUrl && (
-                    <div className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-650 dark:text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-150/40 text-[10px] font-black uppercase inline-flex items-center gap-1.5 mt-2 shadow-sm w-fit">
-                      <Radio className="w-3.5 h-3.5 animate-pulse text-indigo-505" />
-                      Rádio Online
-                    </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="bg-amber-100 dark:bg-amber-950/55 text-amber-700 dark:text-amber-400 px-3 py-1 rounded-full flex items-center gap-1 font-black text-sm shadow-sm">
+                     <Coins className="w-4 h-4"/>
+                     {room.entryFee}
+                  </div>
+                  {room.prize !== undefined && (
+                     <div className="bg-emerald-100 dark:bg-emerald-950/55 text-emerald-700 dark:text-emerald-400 px-3 py-1 rounded-full flex items-center gap-1 font-black text-sm shadow-sm" title="Prêmio">
+                        <Trophy className="w-4 h-4"/>
+                        {room.prize}
+                     </div>
                   )}
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <div className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full flex items-center gap-1 font-black text-sm">
-                   <Coins className="w-4 h-4"/>
-                   {room.entryFee}
+              
+              <div className="flex items-center justify-between mt-6 relative z-10">
+                <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-bold bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                  <Users className="w-4 h-4"/>
+                  {room.players.length} / {room.maxPlayers} Ativos
                 </div>
-                {room.prize !== undefined && (
-                   <div className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1 font-black text-sm" title="Prêmio">
-                      <Trophy className="w-4 h-4"/>
-                      {room.prize}
-                   </div>
-                )}
+                <div className="flex gap-1 md:gap-2 flex-wrap justify-end">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setEditingRoom(room);
+                      setEditName(room.name);
+                      setEditBotsEnabled(room.botsEnabled || false);
+                      setEditMaxBots(room.maxBots || 0);
+                    }}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-955/40 dark:text-amber-400 dark:hover:bg-amber-900/40 px-3 py-2 rounded-xl font-bold flex items-center gap-1 transition-colors text-xs cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5"/>
+                    Editar
+                  </button>
+                  <button 
+                    onClick={() => onDeleteRoom(room.id)}
+                    className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 px-3 py-2 rounded-xl font-bold flex items-center transition-colors text-xs cursor-pointer"
+                  >
+                    Excluir
+                  </button>
+                  <button 
+                    onClick={() => onEnterRoom(room.id)}
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-955/40 dark:text-indigo-400 dark:hover:bg-indigo-900/40 px-3 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-colors text-xs cursor-pointer"
+                  >
+                    Detalhes
+                    <Play className="w-3.5 h-3.5"/>
+                  </button>
+                </div>
               </div>
             </div>
-            
-            <div className="flex items-center justify-between mt-6">
-              <div className="flex items-center gap-1.5 text-slate-500 font-bold bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <Users className="w-4 h-4"/>
-                {room.players.length} / {room.maxPlayers} Ativos
-              </div>
-              <div className="flex gap-1 md:gap-2 flex-wrap justify-end">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setEditingRoom(room);
-                    setEditName(room.name);
-                    setEditBotsEnabled(room.botsEnabled || false);
-                    setEditMaxBots(room.maxBots || 0);
-                  }}
-                  className="bg-amber-100 hover:bg-amber-150 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 px-3 py-2 rounded-xl font-bold flex items-center gap-1 transition-colors text-xs"
-                >
-                  <Edit3 className="w-3.5 h-3.5"/>
-                  Editar
-                </button>
-                <button 
-                  onClick={() => onDeleteRoom(room.id)}
-                  className="text-red-500 hover:bg-red-55/10 px-3 py-2 rounded-xl font-bold flex items-center transition-colors text-xs"
-                >
-                  Excluir
-                </button>
-                <button 
-                  onClick={() => onEnterRoom(room.id)}
-                  className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-2 rounded-xl font-bold flex items-center gap-1.5 transition-colors text-xs"
-                >
-                  Detalhes
-                  <Play className="w-3.5 h-3.5"/>
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {editingRoom && (
         <div className="fixed inset-0 bg-slate-950/65 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150 text-left">
-            <div className="flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col p-5 md:p-6 animate-in fade-in zoom-in-95 duration-150 text-left">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800 shrink-0">
               <h3 className="text-lg font-black text-slate-800 dark:text-white">Editar Configurações da Sala</h3>
               <button 
                 type="button"
                 onClick={() => setEditingRoom(null)} 
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-extrabold text-sm p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-extrabold text-sm p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
             
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nome do Sorteio (Sala)</label>
                 <input 
                   type="text" 
                   value={editName} 
                   onChange={e => setEditName(e.target.value)} 
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-white text-xs md:text-sm" 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-slate-800 dark:text-white text-xs md:text-sm" 
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Configuração de Bots</label>
-                <div className="space-y-3 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-850">
+                <div className="space-y-3 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-800">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input 
                       type="checkbox" 
                       checked={editBotsEnabled} 
                       onChange={e => setEditBotsEnabled(e.target.checked)}
-                      className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600 cursor-pointer" 
+                      className="w-4 h-4 rounded text-indigo-650 focus:ring-indigo-500 accent-indigo-650 cursor-pointer" 
                     />
                     <div className="flex flex-col select-none">
                       <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Permitir Bots Participantes</span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-450 font-semibold">Bots simulam atividade na sala</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Bots simulam atividade na sala</span>
                     </div>
                   </label>
                   
@@ -410,7 +632,7 @@ export function AdminRooms({
                       <select 
                         value={editMaxBots} 
                         onChange={e => setEditMaxBots(Number(e.target.value))} 
-                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs text-slate-700 dark:text-slate-300"
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-xs border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
                       >
                         <option value="1">1 Usuário Bot</option>
                         <option value="2">2 Usuários Bots</option>
@@ -427,13 +649,92 @@ export function AdminRooms({
                   )}
                 </div>
               </div>
+
+              {/* Custom Icon in Edit */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Ícone Temático da Sala</label>
+                <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800">
+                  {PRESET_ICONS.map(ic => (
+                    <button
+                      key={ic}
+                      type="button"
+                      onClick={() => setEditIcon(ic)}
+                      className={`w-8 h-8 text-base flex items-center justify-center rounded-lg transition-all hover:scale-110 ${editIcon === ic ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Background in Edit */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1.5">Imagem de Fundo da Sala</label>
+                <div className="space-y-2 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                  <select 
+                    value={editBgImage} 
+                    onChange={e => setEditBgImage(e.target.value)} 
+                    className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl outline-none font-bold text-xs"
+                  >
+                    {PRESET_BACKGROUNDS.map(bg => (
+                      <option key={bg.value} value={bg.value}>{bg.name}</option>
+                    ))}
+                    <option value="custom">-- Utilizar URL Personalizada ou Arquivo --</option>
+                  </select>
+                  
+                  <input 
+                    type="text" 
+                    value={editBgImage} 
+                    onChange={e => setEditBgImage(e.target.value)} 
+                    placeholder="Cole aqui uma URL de imagem de fundo" 
+                    className="w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800 p-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 outline-none rounded-lg" 
+                  />
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-405 font-bold uppercase">Ou envie um arquivo:</span>
+                    <label className="px-2 py-0.5 bg-slate-200/60 hover:bg-slate-200 dark:bg-slate-800 hover:dark:bg-slate-700 text-[10px] font-black text-slate-700 dark:text-slate-300 rounded cursor-pointer border border-transparent transition-all">
+                      Selecionar Imagem
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              if (reader.result) {
+                                setEditBgImage(reader.result as string);
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }} 
+                        className="hidden" 
+                      />
+                    </label>
+                  </div>
+                  
+                  {editBgImage && (
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-200/40 dark:border-slate-800 mt-2">
+                      <div className="w-16 h-8 rounded border border-slate-200 dark:border-slate-700 bg-cover bg-center overflow-hidden" style={{ backgroundImage: `url(${editBgImage})` }}></div>
+                      <button 
+                        type="button" 
+                        onClick={() => setEditBgImage('')} 
+                        className="text-[10px] font-bold text-red-500 hover:underline"
+                      >
+                        Remover Imagem
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-2 gap-3 pt-3.5 border-t border-slate-200 dark:border-slate-800 shrink-0">
               <button 
                 type="button" 
                 onClick={() => setEditingRoom(null)} 
-                className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold transition-all text-xs uppercase tracking-wider text-center"
+                className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 py-3 rounded-xl font-bold transition-all text-xs uppercase tracking-wider text-center cursor-pointer"
               >
                 Cancelar
               </button>
@@ -442,11 +743,18 @@ export function AdminRooms({
                 disabled={!editName.trim()}
                 onClick={() => {
                   if (onUpdateRoomSettings && editingRoom) {
-                    onUpdateRoomSettings(editingRoom.id, editName, editBotsEnabled, editBotsEnabled ? editMaxBots : 0);
+                    onUpdateRoomSettings(
+                      editingRoom.id, 
+                      editName, 
+                      editBotsEnabled, 
+                      editBotsEnabled ? editMaxBots : 0,
+                      editBgImage,
+                      editIcon
+                    );
                   }
                   setEditingRoom(null);
                 }} 
-                className="w-full bg-indigo-650 hover:bg-indigo-700 text-white py-3 rounded-xl font-black transition-all disabled:opacity-50 text-xs uppercase tracking-wider text-center"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-black transition-all disabled:opacity-50 text-xs uppercase tracking-wider text-center cursor-pointer"
               >
                 Salvar
               </button>

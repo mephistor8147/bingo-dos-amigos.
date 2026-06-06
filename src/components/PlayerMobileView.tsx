@@ -1,11 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { BingoCardData, BingoSpace, Message, GameMode } from '../types';
-import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles, Trophy } from 'lucide-react';
+import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles, Trophy, Palette } from 'lucide-react';
 import { audioController } from '../audioUtils';
 import { toast } from 'react-hot-toast';
 import { isCardWinner } from '../utils';
+
+interface DaubColor {
+  id: string;
+  name: string;
+  lightBg: string; // cell bg when marked in user card
+  cellText: string; // cell text color when marked
+  borderColor: string; // cell border color
+  sampleBg: string; // dot color in selectors
+}
+
+const DAUB_COLORS: DaubColor[] = [
+  { id: 'emerald', name: 'Verde', lightBg: 'bg-emerald-200 dark:bg-emerald-950/60', cellText: 'text-emerald-800 dark:text-emerald-300', borderColor: 'border-emerald-300/50 dark:border-emerald-900/50', sampleBg: 'bg-emerald-500' },
+  { id: 'blue', name: 'Azul', lightBg: 'bg-blue-200 dark:bg-blue-950/60', cellText: 'text-blue-800 dark:text-blue-300', borderColor: 'border-blue-300/50 dark:border-blue-900/50', sampleBg: 'bg-blue-500' },
+  { id: 'pink', name: 'Rosa', lightBg: 'bg-pink-100 dark:bg-pink-950/60', cellText: 'text-pink-800 dark:text-pink-300', borderColor: 'border-pink-300/50 dark:border-pink-900/50', sampleBg: 'bg-pink-500' },
+  { id: 'purple', name: 'Roxo', lightBg: 'bg-purple-150 dark:bg-purple-950/60', cellText: 'text-purple-800 dark:text-purple-300', borderColor: 'border-purple-300/50 dark:border-purple-900/50', sampleBg: 'bg-purple-500' },
+  { id: 'orange', name: 'Laranja', lightBg: 'bg-orange-150 dark:bg-orange-950/60', cellText: 'text-orange-800 dark:text-orange-300', borderColor: 'border-orange-300/50 dark:border-orange-900/50', sampleBg: 'bg-orange-500' },
+  { id: 'red', name: 'Vermelho', lightBg: 'bg-red-150 dark:bg-red-950/60', cellText: 'text-red-800 dark:text-red-300', borderColor: 'border-red-300/50 dark:border-red-900/50', sampleBg: 'bg-red-500' },
+];
 
 interface PlayerMobileViewProps {
   card: BingoCardData;
@@ -60,11 +78,25 @@ const formatTime = (seconds: number) => {
 };
 
 export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList }: PlayerMobileViewProps) {
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
+
+  const activeCard = useMemo(() => {
+    if (isSpectator && selectedParticipantId) {
+      const selectedPlayer = (playersList || []).find(p => p.id === selectedParticipantId);
+      if (selectedPlayer) return selectedPlayer.card;
+    }
+    return card;
+  }, [card, selectedParticipantId, playersList, isSpectator]);
+
   // We'll mimic the "marked" state based on drawnNumbers for now, but a real app would let user tap.
   // Actually, standard digital bingo auto-daubs or user daubs. Let's make it auto-daub for simplicity,
   // or track clicked spaces. Let's track clicked spaces.
   const [markedSpaces, setMarkedSpaces] = useState<Set<string>>(new Set());
   const [autoDaub, setAutoDaub] = useState(true);
+  const [selectedColorId, setSelectedColorId] = useState(() => {
+    return localStorage.getItem('bingo_daub_color') || 'emerald';
+  });
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [hasBingo, setHasBingo] = useState(false);
@@ -72,15 +104,18 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   const [localTimeLeft, setLocalTimeLeft] = useState(initialTimeLeft);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
-  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+  const currentDaubColor = useMemo(() => {
+    return DAUB_COLORS.find(c => c.id === selectedColorId) || DAUB_COLORS[0];
+  }, [selectedColorId]);
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const [bgVolume, setBgVolume] = useState(() => {
     try {
       const saved = localStorage.getItem('bingo_bg_volume');
-      return saved ? Number(saved) : 50; // Default to 50%
+      return saved ? Number(saved) : 20; // Default to 20%
     } catch (e) {
-      return 50;
+      return 20;
     }
   });
 
@@ -358,14 +393,14 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       audioController.playPop();
       
       const lastDrawn = drawnNumbers[drawnNumbers.length - 1];
-      const isOnCard = card.grid.some(row => row.includes(lastDrawn));
+      const isOnCard = activeCard.grid.some(row => row.includes(lastDrawn));
       if (isOnCard && autoDaub) {
          setTimeout(() => {
            audioController.playCoin();
          }, 300); // slight delay after the pop
       }
     }
-  }, [drawnNumbers.length, soundEnabled, autoDaub, card.grid, audioUnlocked]);
+  }, [drawnNumbers.length, soundEnabled, autoDaub, activeCard.grid, audioUnlocked]);
   useEffect(() => {
     if (!scheduledTime) return;
     const interval = setInterval(() => {
@@ -383,7 +418,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     
     const isMarked = (r: number, c: number) => {
       if (r < 0 || r > 4 || c < 0 || c > 4) return false;
-      const cell = card.grid[r][c];
+      const cell = activeCard.grid[r][c];
       return cell === 'FREE' || markedSpaces.has(`${r}-${c}`) || (autoDaub && drawnNumbers.includes(cell as number));
     };
 
@@ -457,7 +492,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
        onSendMessage("🎉 BINGO! Eu ganhei! 🎉");
        setTimeout(() => setShowBingoAnimation(false), 5000);
     }
-  }, [markedSpaces, card.grid, hasBingo, onSendMessage, gameMode]);
+  }, [markedSpaces, activeCard.grid, hasBingo, onSendMessage, gameMode]);
 
   useEffect(() => {
     if (isChatOpen && chatBottomRef.current) {
@@ -510,222 +545,291 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
          <div className="absolute top-0 inset-x-0 h-1/3 bg-gradient-to-b from-sky-300 to-emerald-500 opacity-60"></div>
          <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-emerald-600 to-transparent"></div>
          {/* Simple floral/cloud decor could go here, but CSS gradients do the trick */}
-      </div>
-
-      <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-full">
-        {/* Top Unified Premium Header Card incorporating all circled top elements */}
-        <div className="bg-white/95 dark:bg-slate-900 border border-emerald-400/30 dark:border-slate-800 rounded-3xl p-4 shadow-xl flex flex-col gap-4 w-full mb-6 z-10 transition-all duration-300" onClick={(e) => e.stopPropagation()}>
-          
-          {/* Row 1: Profile and Action Controls */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
-            {/* Left side: profile details + Toggle Button */}
-            <div className="flex items-center justify-between w-full md:w-auto gap-3">
-              <div 
-                onClick={(e) => { e.stopPropagation(); onOpenProfile && onOpenProfile(); }}
-                className="flex items-center gap-3 cursor-pointer hover:bg-emerald-50 dark:hover:bg-slate-800/60 p-1.5 rounded-2xl transition-all text-left"
-              >
-                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border border-emerald-200 dark:border-slate-700 relative shrink-0">
-                   {user.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/> : <User className="w-6 h-6 text-slate-400" />}
-                   {voiceActive && isMyselfSpeaking && (
-                     <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center border-2 border-green-500 rounded-full">
-                       <span className="flex gap-0.5 justify-center items-center">
-                         <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
-                         <span className="w-1 h-4 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
-                         <span className="w-1 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
-                       </span>
-                     </div>
-                   )}
-                </div>
-                <div>
-                   <div className="text-slate-800 dark:text-slate-100 text-sm md:text-base font-black leading-tight tracking-tight">{user.name}</div>
-                   <div className="flex items-center gap-1.5 mt-0.5">
-                     <Coins className="w-4 h-4 text-amber-500 fill-amber-305 shrink-0" />
-                     <span className="text-amber-600 dark:text-amber-400 text-xs md:text-sm font-black">{user.coins.toLocaleString()}</span>
-                   </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {/* Countdown Clock (Always Visible) */}
-                <div className="bg-red-50 dark:bg-red-950/40 border border-red-200/50 dark:border-red-900/40 rounded-xl px-2.5 h-10 flex items-center gap-1 shadow-sm shrink-0">
-                   <Clock className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-                   <span className="text-red-700 dark:text-red-400 font-black text-xs tracking-wider">{formatTime(localTimeLeft)}</span>
-                </div>
-
-                {/* Icon toggle button */}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setIsHeaderExpanded(!isHeaderExpanded); }}
-                  className="p-2 rounded-xl text-slate-500 hover:text-indigo-650 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 active:scale-95"
-                  title={isHeaderExpanded ? "Ocultar detalhes" : "Mostrar detalhes"}
+         <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-full">
+        {!isHeaderExpanded ? (
+          <div className="flex justify-end w-full mb-2 px-1 relative z-50 animate-in fade-in slide-in-from-top-1 duration-200">
+            <button
+              onClick={() => setIsHeaderExpanded(true)}
+              className="p-3 bg-white/95 dark:bg-slate-900 border border-emerald-300 dark:border-slate-800 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center shrink-0"
+              title="Exibir Painel de Controle"
+            >
+              <Eye className="w-5 h-5 text-emerald-600 dark:text-emerald-450" />
+            </button>
+          </div>
+        ) : (
+          /* Top Unified Premium Header Card incorporating all circled top elements */
+          <div className="bg-white/95 dark:bg-slate-900 border border-emerald-400/30 dark:border-slate-800 rounded-3xl p-3 shadow-xl flex flex-col gap-3.5 w-full mb-4 z-10 transition-all duration-300" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Row 1: Profile and Action Controls */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+              {/* Left side: profile details + Toggle Button */}
+              <div className="flex items-center justify-between w-full md:w-auto gap-3">
+                <div 
+                  onClick={(e) => { e.stopPropagation(); onOpenProfile && onOpenProfile(); }}
+                  className="flex items-center gap-3 cursor-pointer hover:bg-emerald-50 dark:hover:bg-slate-800/60 p-1.5 rounded-2xl transition-all text-left"
                 >
-                  {isHeaderExpanded ? <EyeOff className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Eye className="w-5 h-5 text-emerald-605 dark:text-emerald-400" />}
-                </button>
-              </div>
-            </div>
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border border-emerald-200 dark:border-slate-700 relative shrink-0">
+                     {user.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/> : <User className="w-6 h-6 text-slate-400" />}
+                     {voiceActive && isMyselfSpeaking && (
+                       <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center border-2 border-green-500 rounded-full">
+                         <span className="flex gap-0.5 justify-center items-center">
+                           <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                           <span className="w-1 h-4 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                           <span className="w-1 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                         </span>
+                       </div>
+                     )}
+                  </div>
+                  <div>
+                     <div className="text-slate-800 dark:text-slate-100 text-sm md:text-base font-black leading-tight tracking-tight">{user.name}</div>
+                     <div className="flex items-center gap-1.5 mt-0.5">
+                       <Coins className="w-4 h-4 text-amber-500 fill-amber-305 shrink-0" />
+                       <span className="text-amber-600 dark:text-amber-400 text-xs md:text-sm font-black">{user.coins.toLocaleString()}</span>
+                     </div>
+                  </div>
+                </div>
 
-            {/* Right side: game controls row */}
-            {isHeaderExpanded && (
-              <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
-                {/* Online Radio Button Play/Pause Toggle */}
-                {onlineRadioUrl && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Chat Warning Notification Icon (Only visible when chat is closed and there are messages) */}
+                  {!isChatOpen && messages.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsChatOpen(true);
+                        setTimeout(() => {
+                          if (chatBottomRef.current) {
+                            chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+                          }
+                        }, 100);
+                      }}
+                      className="relative p-2 rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-900 shadow-sm bg-amber-50 dark:bg-slate-900 active:scale-95 animate-bounce"
+                      title="Novas mensagens no chat"
+                    >
+                      <MessageCircle className="w-5 h-5 text-amber-500 animate-pulse" />
+                      <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-900 animate-ping"></span>
+                      <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                    </button>
+                  )}
+
+                  {/* Countdown Clock (Hidden when <= 0) */}
+                  {localTimeLeft > 0 && (
+                    <div className="bg-red-50 dark:bg-red-950/40 border border-red-200/50 dark:border-red-900/40 rounded-xl px-2.5 h-10 flex items-center gap-1 shadow-sm shrink-0">
+                       <Clock className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                       <span className="text-red-700 dark:text-red-400 font-black text-xs tracking-wider">{formatTime(localTimeLeft)}</span>
+                    </div>
+                  )}
+
+                  {/* Icon toggle button */}
                   <button 
-                    onClick={toggleRadio} 
-                    title={isRadioPlaying ? "Pausar rádio online" : "Escutar rádio online"}
+                    onClick={(e) => { e.stopPropagation(); setIsHeaderExpanded(!isHeaderExpanded); }}
+                    className="p-2 rounded-xl text-slate-500 hover:text-indigo-650 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 active:scale-95"
+                    title={isHeaderExpanded ? "Ocultar detalhes" : "Mostrar detalhes"}
+                  >
+                    {isHeaderExpanded ? <EyeOff className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Eye className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Right side: game controls row */}
+              {isHeaderExpanded && (
+                <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+                  {/* Online Radio Button Play/Pause Toggle */}
+                  {onlineRadioUrl && (
+                    <button 
+                      onClick={toggleRadio} 
+                      title={isRadioPlaying ? "Pausar rádio online" : "Escutar rádio online"}
+                      className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                        isRadioPlaying 
+                          ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse shadow-indigo-600/10' 
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
+                      }`}
+                    >
+                      <Radio className={`w-4 h-4 ${isRadioPlaying ? 'text-indigo-200 animate-spin-slow' : 'text-slate-400 dark:text-slate-505'}`} />
+                    </button>
+                  )}
+
+                  {/* Real Voice Chat Button */}
+                  <button 
+                    onClick={toggleVoiceChat} 
+                    title={voiceActive ? "Desativar Canal de Voz" : "Ativar Canal de Voz"}
                     className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
-                      isRadioPlaying 
-                        ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse shadow-indigo-600/10' 
+                      voiceActive 
+                        ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse' 
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
-                    <Radio className={`w-4 h-4 ${isRadioPlaying ? 'text-indigo-200 animate-spin-slow' : 'text-slate-400 dark:text-slate-505'}`} />
+                    {voiceActive ? <Mic className="w-4 h-4 text-emerald-300" /> : <MicOff className="w-4 h-4 text-slate-400 dark:text-slate-505" />}
                   </button>
-                )}
 
-                {/* Real Voice Chat Button */}
-                <button 
-                  onClick={toggleVoiceChat} 
-                  title={voiceActive ? "Desativar Canal de Voz" : "Ativar Canal de Voz"}
-                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
-                    voiceActive 
-                      ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse' 
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
-                  }`}
-                >
-                  {voiceActive ? <Mic className="w-4 h-4 text-emerald-300" /> : <MicOff className="w-4 h-4 text-slate-400 dark:text-slate-505" />}
-                </button>
+                  {/* Sound Controls */}
+                  <button 
+                    onClick={toggleSound} 
+                    title="Áudio do Jogo"
+                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm shrink-0 ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-505 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
+                  >
+                    {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  </button>
 
-                {/* Sound Controls */}
-                <button 
-                  onClick={toggleSound} 
-                  title="Áudio do Jogo"
-                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm shrink-0 ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-505 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
-                >
-                  {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                </button>
+                  {/* Adjustable Volume Slider wrapper */}
+                  {soundEnabled && (
+                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 h-10 rounded-xl shadow-sm shrink-0">
+                      <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        value={bgVolume} 
+                        onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                        className="w-16 sm:w-20 accent-emerald-500 h-1 cursor-pointer bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none" 
+                        title="Volume do Som de Fundo"
+                      />
+                      <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 w-6 text-right shrink-0">{bgVolume}%</span>
+                    </div>
+                  )}
 
-                {/* Adjustable Volume Slider wrapper */}
-                {soundEnabled && (
-                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-205 dark:border-slate-700 px-3 h-10 rounded-xl shadow-sm shrink-0">
-                    <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <input 
-                      type="range" 
-                      min="0" 
-                      max="100" 
-                      value={bgVolume} 
-                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                      className="w-16 sm:w-20 accent-emerald-500 h-1 cursor-pointer bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none" 
-                      title="Volume do Som de Fundo"
-                    />
-                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 w-6 text-right shrink-0">{bgVolume}%</span>
+                  {/* Auto Daub Button */}
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setAutoDaub(!autoDaub); }} 
+                    title="Marcação Automática"
+                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                      autoDaub 
+                        ? 'bg-indigo-600 border-indigo-400/30 text-white' 
+                        : 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </button>
+
+                  {/* Color Daub Color Chooser Button */}
+                  <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      onClick={() => setIsColorPickerOpen(!isColorPickerOpen)} 
+                      title="Escolher Cor de Marcação"
+                      className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-505 border-slate-205 dark:border-slate-700 hover:bg-slate-100 ${isColorPickerOpen ? 'ring-2 ring-indigo-500 border-transparent shadow-md' : ''}`}
+                    >
+                      <Palette className="w-4 h-4 text-indigo-550 dark:text-indigo-400" />
+                    </button>
+                    {isColorPickerOpen && (
+                      <div className="absolute right-0 top-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xl z-50 flex flex-col gap-2 min-w-[210px] animate-in fade-in slide-in-from-top-2 duration-150">
+                        <span className="text-[10px] font-black text-slate-400 dark:text-slate-505 uppercase tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1 mb-1 text-center">
+                          Cor de Marcação
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {DAUB_COLORS.map(color => (
+                            <button
+                              key={color.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedColorId(color.id);
+                                localStorage.setItem('bingo_daub_color', color.id);
+                                setIsColorPickerOpen(false);
+                              }}
+                              className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all active:scale-90 hover:bg-slate-50 dark:hover:bg-slate-800 ${selectedColorId === color.id ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'}`}
+                            >
+                              <div className={`w-4 h-4 rounded-full ${color.sampleBg} shadow-sm`} />
+                              <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">{color.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                {/* Auto Daub Button */}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setAutoDaub(!autoDaub); }} 
-                  title="Marcação Automática"
-                  className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
-                    autoDaub 
-                      ? 'bg-indigo-600 border-indigo-400/30 text-white' 
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-705 hover:bg-slate-100'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                </button>
+                  {/* Exit Button */}
+                  <button onClick={onExit} className="w-10 h-10 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-655 dark:text-red-400 flex items-center justify-center border border-red-100 dark:border-red-900 active:scale-95 transition-all shadow-sm" title="Sair do Jogo">
+                     <ArrowLeft className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
+            </div>
 
-                {/* Exit Button */}
-                <button onClick={onExit} className="w-10 h-10 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-655 dark:text-red-400 flex items-center justify-center border border-red-100 dark:border-red-900 active:scale-95 transition-all shadow-sm" title="Sair do Jogo">
-                   <ArrowLeft className="w-5 h-5" />
-                </button>
+            {/* Elegant Slate Divider Line with high contrast */}
+            {isHeaderExpanded && (
+              <div className="h-px bg-slate-100 dark:bg-slate-800/80 w-full animate-none" />
+            )}
+
+            {/* Row 2: Participants list and Live Info Badges */}
+            {isHeaderExpanded && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+                {/* Left Part: Participants list miniatures */}
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 w-full sm:max-w-[70%]">
+                   <div className="flex -space-x-1.5 shrink-0">
+                     {participants.map((p, idx) => {
+                       const isSpeaking = speakersState[p.uid]?.isSpeaking && voiceActive;
+                       const isVoiceUser = connectedVoicePlayers.has(p.uid) && voiceActive;
+                       return (
+                         <div 
+                           key={p.uid} 
+                           className={`w-8 h-8 rounded-full border-2 bg-white dark:bg-slate-800 overflow-hidden shadow-sm flex-shrink-0 transition-all duration-200 relative ${
+                             isSpeaking 
+                               ? 'border-green-500 scale-110 ring-2 ring-green-400/40 z-10' 
+                               : (isVoiceUser ? 'border-indigo-400' : 'border-emerald-400 dark:border-emerald-600')
+                           }`} 
+                           title={`${p.name} ${isVoiceUser ? '(Canal de Voz)' : ''}`}
+                         >
+                           {p.avatar ? (
+                             <img src={p.avatar} alt={p.name} className="w-full h-full object-cover"/>
+                           ) : (
+                             <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold text-xs uppercase">
+                               {p.name.charAt(0)}
+                             </div>
+                           )}
+                           {/* Dynamic Voice Wave Animation Overlay */}
+                           {isSpeaking && (
+                             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+                               <span className="flex gap-0.5 justify-center items-center">
+                                 <span className="w-0.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                 <span className="w-0.5 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '100ms' }} />
+                                 <span className="w-0.5 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
+                               </span>
+                             </div>
+                           )}
+                         </div>
+                       );
+                     })}
+                   </div>
+                   {participants.length === 0 && (
+                     <span className="text-slate-400 dark:text-slate-505 text-xs font-semibold">Nenhum participante ativo</span>
+                   )}
+                </div>
+
+                {/* Right Part: Dynamic Status Badges (Balls drawn & Online count) */}
+                <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  {drawnNumbers.length > 0 && (
+                    <div className="bg-emerald-50 dark:bg-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wide uppercase text-emerald-855 dark:text-emerald-305 border border-emerald-250/20 dark:border-slate-800/80 shadow-sm flex items-center gap-1.5 transition-colors">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                      Bolas Sorteadas: <span className="text-emerald-600 dark:text-emerald-400 font-black">{drawnNumbers.length}</span> / 75
+                    </div>
+                  )}
+
+                  <div className="text-[10px] font-black uppercase text-emerald-850 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200/20 dark:border-emerald-900/30 flex items-center gap-1.5 shadow-sm">
+                    {voiceActive && (
+                      <span className="flex h-1.5 w-1.5 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-405 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                      </span>
+                    )}
+                    {participants.length + 1} online
+                  </div>
+                </div>
               </div>
             )}
           </div>
-
-          {/* Elegant Slate Divider Line with high contrast */}
-          {isHeaderExpanded && (
-            <div className="h-px bg-slate-100 dark:bg-slate-800/80 w-full animate-none" />
-          )}
-
-          {/* Row 2: Participants list and Live Info Badges */}
-          {isHeaderExpanded && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
-              {/* Left Part: Participants list miniatures */}
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 w-full sm:max-w-[70%]">
-                 <div className="flex -space-x-1.5 shrink-0">
-                   {participants.map((p, idx) => {
-                     const isSpeaking = speakersState[p.uid]?.isSpeaking && voiceActive;
-                     const isVoiceUser = connectedVoicePlayers.has(p.uid) && voiceActive;
-                     return (
-                       <div 
-                         key={p.uid} 
-                         className={`w-8 h-8 rounded-full border-2 bg-white dark:bg-slate-850 overflow-hidden shadow-sm flex-shrink-0 transition-all duration-200 relative ${
-                           isSpeaking 
-                             ? 'border-green-500 scale-110 ring-2 ring-green-400/40 z-10' 
-                             : (isVoiceUser ? 'border-indigo-400' : 'border-emerald-400 dark:border-emerald-600')
-                         }`} 
-                         title={`${p.name} ${isVoiceUser ? '(Canal de Voz)' : ''}`}
-                       >
-                         {p.avatar ? (
-                           <img src={p.avatar} alt={p.name} className="w-full h-full object-cover"/>
-                         ) : (
-                           <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold text-xs uppercase">
-                             {p.name.charAt(0)}
-                           </div>
-                         )}
-                         {/* Dynamic Voice Wave Animation Overlay */}
-                         {isSpeaking && (
-                           <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-                             <span className="flex gap-0.5 justify-center items-center">
-                               <span className="w-0.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                               <span className="w-0.5 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '100ms' }} />
-                               <span className="w-0.5 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '200ms' }} />
-                             </span>
-                           </div>
-                         )}
-                       </div>
-                     );
-                   })}
-                 </div>
-                 {participants.length === 0 && (
-                   <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold">Nenhum participante ativo</span>
-                 )}
-              </div>
-
-              {/* Right Part: Dynamic Status Badges (Balls drawn & Online count) */}
-              <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                {drawnNumbers.length > 0 && (
-                  <div className="bg-emerald-50 dark:bg-slate-850 px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wide uppercase text-emerald-855 dark:text-emerald-305 border border-emerald-250/20 dark:border-slate-800/80 shadow-sm flex items-center gap-1.5 transition-colors">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                    Bolas Sorteadas: <span className="text-emerald-600 dark:text-emerald-400 font-black">{drawnNumbers.length}</span> / 75
-                  </div>
-                )}
-
-                <div className="text-[10px] font-black uppercase text-emerald-850 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/40 px-3 py-1.5 rounded-xl border border-emerald-200/20 dark:border-emerald-900/30 flex items-center gap-1.5 shadow-sm">
-                  {voiceActive && (
-                    <span className="flex h-1.5 w-1.5 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-405 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
-                    </span>
-                  )}
-                  {participants.length + 1} online
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
         {/* Admin Participant Cards Miniature Section */}
         {user.role === 'admin' && (
-          <div className="bg-white/95 dark:bg-slate-900 border border-indigo-400/30 dark:border-slate-800 rounded-3xl p-5 shadow-xl flex flex-col gap-4 w-full mb-6 z-10 transition-all">
+          <div className="bg-white/95 dark:bg-slate-900 border border-indigo-400/30 dark:border-slate-800 rounded-3xl p-3.5 shadow-xl flex flex-col gap-3 w-full mb-4 z-10 transition-all">
             <h3 className="font-extrabold text-slate-805 dark:text-white text-base md:text-lg flex items-center gap-2">
               <Award className="w-5 h-5 text-indigo-500 animate-pulse" />
               <span>Cartelas dos Participantes ({playersList?.length || 0})</span>
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 overflow-y-auto max-h-96 pr-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 overflow-y-auto max-h-96 pr-2">
               {playersList?.map(p => {
                 const isWinner = isCardWinner(p.card, drawnNumbers, gameMode);
                 return (
-                  <div key={p.id} className={`p-4 rounded-2xl border transition-all ${
+                  <div key={p.id} className={`p-3 rounded-2xl border transition-all ${
                     isWinner 
                       ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-400 shadow-amber-500/10 shadow-lg' 
                       : 'bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800'
@@ -773,7 +877,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
         )}
 
         {/* Drawn Balls Animation Stage */}
-        <div className="flex flex-col items-center mb-6 bg-slate-105/50 dark:bg-slate-900/60 p-4 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-inner max-w-md mx-auto w-full">
+        <div className="flex flex-col items-center mb-4 bg-slate-100/50 dark:bg-slate-900/60 p-3 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-inner max-w-md mx-auto w-full">
           <span className="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2 select-none">Painel de Sorteio</span>
           <div className="flex items-center gap-4 h-28 justify-center w-full relative">
             <AnimatePresence mode="popLayout">
@@ -860,35 +964,70 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
           </div>
         )}
 
+        {/* Bot / Participant Selector for Demonstration */}
+        {isSpectator && (playersList || []).length > 0 && (
+          <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-3xl mb-4 max-w-[500px] w-full mx-auto shadow-sm">
+            <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-505 animate-pulse" />
+              <span>Painel de Simulação - Ver Participante:</span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                onClick={() => setSelectedParticipantId('')}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all ${
+                  selectedParticipantId === ''
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-350 border border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                Minha Visão (Espectador)
+              </button>
+              {(playersList || []).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedParticipantId(p.id)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                    selectedParticipantId === p.id
+                      ? 'bg-indigo-600 text-white shadow-sm font-black'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  {p.id.startsWith('bot_') ? '🤖' : '👤'} {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Bingo Card Container */}
-        <div className="bg-emerald-300 rounded-3xl p-3 shadow-2xl shadow-emerald-900/40 border-4 border-emerald-400 relative max-w-[500px] w-full mx-auto">
+        <div className="bg-emerald-300 rounded-3xl p-2.5 shadow-2xl shadow-emerald-900/40 border-[3px] border-emerald-400 relative max-w-[460px] w-full mx-auto">
           
-          <div className="grid grid-cols-5 gap-2 mb-3">
+          <div className="grid grid-cols-5 gap-1.5 mb-2">
              {COLUMN_LETTERS.map((letter, i) => (
-                <div key={letter} className={`h-10 rounded-xl flex items-center justify-center ${COLUMN_COLORS[i]} border-2 border-white/20 shadow-inner`}>
+                <div key={letter} className={`h-8 rounded-xl flex items-center justify-center ${COLUMN_COLORS[i]} border-2 border-white/20 shadow-inner`}>
                   <span className="text-white font-black text-xl drop-shadow-md">{letter}</span>
                 </div>
              ))}
           </div>
 
-          <div className="bg-white/40 p-2 rounded-2xl grid grid-cols-5 gap-2 backdrop-blur-sm border border-white/50">
-            {card.grid.map((row, rIdx) => 
+          <div className="bg-white/40 p-1.5 rounded-2xl grid grid-cols-5 gap-1.5 backdrop-blur-sm border border-white/50">
+            {activeCard.grid.map((row, rIdx) => 
                row.map((cell, cIdx) => {
                  const isFree = cell === 'FREE';
                  const isMarked = isFree || markedSpaces.has(`${rIdx}-${cIdx}`) || drawnNumbers.includes(cell as number);
                  const bgClass = isFree 
                     ? 'bg-emerald-400' 
-                    : (isMarked ? 'bg-emerald-200' : 'bg-white');
+                    : (isMarked ? currentDaubColor.lightBg : 'bg-white');
                  const textClass = isFree 
                     ? 'text-white' 
-                    : (isMarked ? 'text-emerald-800' : 'text-slate-800');
+                    : (isMarked ? currentDaubColor.cellText : 'text-slate-800');
                     
                  return (
                    <button
                      key={`${rIdx}-${cIdx}`}
                      onClick={() => !isSpectator && !isFree && handleSpaceClick(rIdx, cIdx, cell)}
                      disabled={isSpectator}
-                     className={`aspect-square rounded-xl shadow-sm flex items-center justify-center font-black transition-all border-b-4 ${bgClass} ${textClass} ${isMarked ? 'border-emerald-300/50' : 'border-slate-200'} ${isSpectator ? 'cursor-not-allowed opacity-90' : 'active:scale-95'}`}
+                     className={`aspect-square rounded-xl shadow-sm flex items-center justify-center font-black transition-all border-b-4 ${bgClass} ${textClass} ${isMarked ? currentDaubColor.borderColor : 'border-slate-200'} ${isSpectator ? 'cursor-not-allowed opacity-90' : 'active:scale-95'}`}
                    >
                      {isFree ? (
                        <Star className="w-8 h-8 fill-yellow-300 text-yellow-500 drop-shadow-sm" />
@@ -1041,7 +1180,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                         key={winner.id}
                         initial={{ opacity: 0, x: -15 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="flex items-center gap-3 bg-slate-50 dark:bg-slate-850/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800"
+                        className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800"
                       >
                         <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-400 bg-amber-50 shrink-0 shadow-md">
                           <img 

@@ -142,6 +142,11 @@ export default function App() {
       const { db } = await import('./lib/firebase');
 
       const newRoomId = Math.random().toString(36).substring(2, 9);
+      
+      const isBotVsBot = partialRoom.gameMode === 'bot_vs_bot';
+      const finalBotsEnabled = isBotVsBot ? true : (partialRoom.botsEnabled || false);
+      const finalMaxBots = isBotVsBot ? Math.max(5, partialRoom.maxBots || 5) : (partialRoom.maxBots || 0);
+
       const roomPayload = {
         name: partialRoom.name!,
         entryFee: partialRoom.entryFee!,
@@ -153,21 +158,24 @@ export default function App() {
         gameMode: partialRoom.gameMode || 'full_card',
         bgMusicUrl: partialRoom.bgMusicUrl || null,
         onlineRadioUrl: partialRoom.onlineRadioUrl || null,
-        botsEnabled: partialRoom.botsEnabled || false,
-        maxBots: partialRoom.maxBots || 0,
+        backgroundImageUrl: partialRoom.backgroundImageUrl || null,
+        roomIcon: partialRoom.roomIcon || null,
+        botsEnabled: finalBotsEnabled,
+        maxBots: finalMaxBots,
         isAutoCreated: false
       };
 
       await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
 
       // Create bots inside subcollection players if bots are enabled
-      if (partialRoom.botsEnabled && partialRoom.maxBots && partialRoom.maxBots > 0) {
+      if (finalBotsEnabled && finalMaxBots && finalMaxBots > 0) {
         const botNames = [
           "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
-          "Bot Lucas", "Bot Julia", "Bot Marcos", "Bot Fernanda", "Bot Felipe"
+          "Bot Lucas", "Bot Julia", "Bot Marcos", "Bot Fernanda", "Bot Felipe",
+          "Bot Gustavo", "Bot Patrícia", "Bot Alana", "Bot Ricardo", "Bot Aline"
         ];
         const shuffled = [...botNames].sort(() => 0.5 - Math.random());
-        const count = Math.min(partialRoom.maxBots, shuffled.length);
+        const count = Math.min(finalMaxBots, shuffled.length);
 
         for (let i = 0; i < count; i++) {
           const botId = `bot_manual_${Math.random().toString(36).substring(2, 9)}`;
@@ -287,7 +295,7 @@ export default function App() {
     toast.success('Sala excluída.');
   };
 
-  const handleUpdateRoomSettings = async (roomId: string, name: string, botsEnabled: boolean, maxBots: number) => {
+  const handleUpdateRoomSettings = async (roomId: string, name: string, botsEnabled: boolean, maxBots: number, backgroundImageUrl?: string, roomIcon?: string) => {
     try {
       const { doc, getDocs, setDoc, deleteDoc, updateDoc, collection } = await import('firebase/firestore');
       const { db } = await import('./lib/firebase');
@@ -297,7 +305,9 @@ export default function App() {
       await updateDoc(roomRef, {
         name,
         botsEnabled,
-        maxBots: botsEnabled ? maxBots : 0
+        maxBots: botsEnabled ? maxBots : 0,
+        backgroundImageUrl: backgroundImageUrl || null,
+        roomIcon: roomIcon || null
       });
 
       // 2. Ajustar quantidade e dados de bots na subcoleção de jogadores da sala
@@ -387,6 +397,10 @@ export default function App() {
   const [autoRoomInterval, setAutoRoomInterval] = useState(5);
   const [autoRoomStartHour, setAutoRoomStartHour] = useState("00:00");
   const [autoRoomEndHour, setAutoRoomEndHour] = useState("23:59");
+  const [autoRoomRadioUrl, setAutoRoomRadioUrl] = useState("");
+  const [autoRoomBotsCount, setAutoRoomBotsCount] = useState(2);
+  const [autoRoomBaseName, setAutoRoomBaseName] = useState("Sala do Milhão");
+  const [autoRoomSequenceNumber, setAutoRoomSequenceNumber] = useState(1);
   const [processedRooms, setProcessedRooms] = useState<Set<string>>(new Set());
   const [scheduledDeletions, setScheduledDeletions] = useState<Set<string>>(new Set());
 
@@ -406,6 +420,10 @@ export default function App() {
             setAutoRoomInterval(data.intervalMinutes ?? 5);
             setAutoRoomStartHour(data.startHour ?? "00:00");
             setAutoRoomEndHour(data.endHour ?? "23:59");
+            setAutoRoomRadioUrl(data.radioUrl ?? "");
+            setAutoRoomBotsCount(data.botsCount ?? 2);
+            setAutoRoomBaseName(data.roomBaseName ?? "Sala do Milhão");
+            setAutoRoomSequenceNumber(data.roomSequenceNumber ?? 1);
           }
         });
       } catch (err) {
@@ -426,9 +444,51 @@ export default function App() {
         enabled: newVal,
         intervalMinutes: autoRoomInterval,
         startHour: autoRoomStartHour,
-        endHour: autoRoomEndHour
+        endHour: autoRoomEndHour,
+        radioUrl: autoRoomRadioUrl
       }, { merge: true });
       toast.success(newVal ? 'Criação automática ativada!' : 'Criação automática desativada!');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomBotsCount = async (val: number) => {
+    setAutoRoomBotsCount(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        botsCount: val
+      }, { merge: true });
+      toast.success(`Quantidade de bots atualizada para ${val}!`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomBaseName = async (val: string) => {
+    setAutoRoomBaseName(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        roomBaseName: val
+      }, { merge: true });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomSequenceNumber = async (val: number) => {
+    setAutoRoomSequenceNumber(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        roomSequenceNumber: val
+      }, { merge: true });
+      toast.success(`Sequencial atualizado para ${val}!`);
     } catch (e) {
       console.error(e);
     }
@@ -443,7 +503,8 @@ export default function App() {
         enabled: autoRoomEnabled,
         intervalMinutes: val,
         startHour: autoRoomStartHour,
-        endHour: autoRoomEndHour
+        endHour: autoRoomEndHour,
+        radioUrl: autoRoomRadioUrl
       }, { merge: true });
       toast.success(`Intervalo atualizado para ${val} min!`);
     } catch (e) {
@@ -461,9 +522,28 @@ export default function App() {
         enabled: autoRoomEnabled,
         intervalMinutes: autoRoomInterval,
         startHour: start,
-        endHour: end
+        endHour: end,
+        radioUrl: autoRoomRadioUrl
       }, { merge: true });
       toast.success(`Funcionamento automático configurado das ${start} às ${end}!`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomRadioUrl = async (val: string) => {
+    setAutoRoomRadioUrl(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        enabled: autoRoomEnabled,
+        intervalMinutes: autoRoomInterval,
+        startHour: autoRoomStartHour,
+        endHour: autoRoomEndHour,
+        radioUrl: val
+      }, { merge: true });
+      toast.success(val ? 'Preset de rádio configurado para salas automáticas!' : 'Configuração de rádio automática limpa.');
     } catch (e) {
       console.error(e);
     }
@@ -472,14 +552,27 @@ export default function App() {
   // Criação automática de salas: se ativado, agenda uma nova se não houver nenhuma agendada
   const triggerAutoRoomCreation = async () => {
     try {
-      const { doc, setDoc } = await import('firebase/firestore');
+      const { doc, setDoc, getDoc } = await import('firebase/firestore');
       const { db } = await import('./lib/firebase');
+
+      // Sync and retrieve latest parameters from Firebase settings doc
+      const sfDoc = await getDoc(doc(db, 'settings', 'global_automation'));
+      let currentSeq = autoRoomSequenceNumber;
+      let namePattern = autoRoomBaseName;
+      let botsCount = autoRoomBotsCount;
+      if (sfDoc.exists()) {
+        const d = sfDoc.data();
+        currentSeq = d.roomSequenceNumber ?? currentSeq;
+        namePattern = d.roomBaseName ?? namePattern;
+        botsCount = d.botsCount ?? botsCount;
+      }
       
       const newRoomId = 'auto_' + Math.random().toString(36).substring(2, 9);
       const scheduledTime = Date.now() + autoRoomInterval * 60 * 1000;
       
+      const paddedSeq = currentSeq.toString().padStart(2, '0');
       const roomPayload = {
-        name: `Sala Automática ⚡`,
+        name: `${namePattern} ${paddedSeq}`,
         entryFee: 40,
         prize: 400,
         scheduledTime,
@@ -487,28 +580,41 @@ export default function App() {
         status: 'waiting',
         drawnNumbers: [],
         gameMode: 'full_card',
-        botsEnabled: true,
-        maxBots: 2,
-        isAutoCreated: true
+        botsEnabled: botsCount > 0,
+        maxBots: botsCount,
+        isAutoCreated: true,
+        ...(autoRoomRadioUrl ? { onlineRadioUrl: autoRoomRadioUrl } : {})
       };
       
       await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+
+      // Save next sequence number
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        roomSequenceNumber: currentSeq + 1
+      }, { merge: true });
       
-      // Adicionar 2 bots na coleção de players
-      const botNames = ["Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato"];
-      const shuffled = [...botNames].sort(() => 0.5 - Math.random());
-      
-      for (let i = 0; i < 2; i++) {
-        const botId = `bot_auto_${Math.random().toString(36).substring(2, 9)}`;
-        const botCard = generateBingoCard(botId, shuffled[i]);
-        await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
-          name: shuffled[i],
-          card: {
-            id: botCard.id,
-            playerName: botCard.playerName,
-            grid: serializeGrid(botCard.grid)
-          }
-        });
+      // Adicionar bots na coleção de players
+      if (botsCount > 0) {
+        const botNames = [
+          "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
+          "Bot Bruno", "Bot Carol", "Bot Diego", "Bot Eduardo", "Bot Felipe",
+          "Bot Gisele", "Bot Hugo", "Bot Igor", "Bot Julia", "Bot Lucas"
+        ];
+        const shuffled = [...botNames].sort(() => 0.5 - Math.random());
+        const botsToCreate = Math.min(botsCount, shuffled.length);
+        
+        for (let i = 0; i < botsToCreate; i++) {
+          const botId = `bot_auto_${Math.random().toString(36).substring(2, 9)}`;
+          const botCard = generateBingoCard(botId, shuffled[i]);
+          await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
+            name: shuffled[i],
+            card: {
+              id: botCard.id,
+              playerName: botCard.playerName,
+              grid: serializeGrid(botCard.grid)
+            }
+          });
+        }
       }
       
       console.log("Automatic Scheduled Room created.");
@@ -670,6 +776,8 @@ export default function App() {
               prize: data.prize || 100,
               bgMusicUrl: data.bgMusicUrl,
               onlineRadioUrl: data.onlineRadioUrl,
+              backgroundImageUrl: data.backgroundImageUrl || null,
+              roomIcon: data.roomIcon || null,
               botsEnabled: data.botsEnabled || false,
               maxBots: data.maxBots || 0,
               isAutoCreated: data.isAutoCreated || false
@@ -918,6 +1026,25 @@ export default function App() {
     return () => clearInterval(clockStatus);
   }, [appState.rooms, appState.currentUser]);
 
+  // Inicia salas bot_vs_bot imediatamente quando alguém entra para assistir a demonstração
+  useEffect(() => {
+    if (!appState.currentRoomId || !appState.currentUser) return;
+    const room = appState.rooms.find(r => r.id === appState.currentRoomId);
+    if (room && room.gameMode === 'bot_vs_bot' && room.status === 'waiting') {
+      const autoStart = async () => {
+        try {
+          const { doc, updateDoc } = await import('firebase/firestore');
+          const { db } = await import('./lib/firebase');
+          await updateDoc(doc(db, 'rooms', room.id), { status: 'active' });
+          console.log(`[Bot vs Bot Start] Sala demo ${room.id} decolou imediatamente.`);
+        } catch (e) {
+          console.error("Erro ao ativar sala bot_vs_bot:", e);
+        }
+      };
+      autoStart();
+    }
+  }, [appState.currentRoomId, appState.rooms, appState.currentUser]);
+
   // Motor Distribuído: Host autoritativo sorteia as bolas diretamente no Firestore
   useEffect(() => {
     if (!appState.currentUser) return;
@@ -930,12 +1057,17 @@ export default function App() {
         // Define se este usuário logado atua como coordenador do sorteio nesta rodada:
         // Se for admin e estiver ativamente visualizando o painel com autodraw ligado, ou o primeiro jogador (por ordem alfabética de UID) se o admin estiver ausente ou para salas automáticas.
         const isHost = (() => {
+          if (room.gameMode === 'bot_vs_bot') {
+            return appState.currentRoomId === room.id;
+          }
           if (appState.currentUser?.role === 'admin') {
             return appState.currentRoomId === room.id && isAdminAutoDraw;
           }
           
           const normalPlayers = (room.players || []).filter(p => !p.id.startsWith('bot_'));
-          if (normalPlayers.length === 0) return false;
+          if (normalPlayers.length === 0) {
+            return false;
+          }
           
           const sortedNormalPlayers = [...normalPlayers].sort((a, b) => a.id.localeCompare(b.id));
           return sortedNormalPlayers[0]?.id === appState.currentUser?.uid;
@@ -1151,9 +1283,17 @@ export default function App() {
                   autoRoomInterval={autoRoomInterval}
                   autoRoomStartHour={autoRoomStartHour}
                   autoRoomEndHour={autoRoomEndHour}
+                  autoRoomRadioUrl={autoRoomRadioUrl}
+                  autoRoomBotsCount={autoRoomBotsCount}
+                  autoRoomBaseName={autoRoomBaseName}
+                  autoRoomSequenceNumber={autoRoomSequenceNumber}
                   onToggleAutoRoomEnabled={handleToggleAutoRoomEnabled}
                   onUpdateAutoRoomInterval={handleUpdateAutoRoomInterval}
                   onUpdateAutoRoomHours={handleUpdateAutoRoomHours}
+                  onUpdateAutoRoomRadioUrl={handleUpdateAutoRoomRadioUrl}
+                  onUpdateAutoRoomBotsCount={handleUpdateAutoRoomBotsCount}
+                  onUpdateAutoRoomBaseName={handleUpdateAutoRoomBaseName}
+                  onUpdateAutoRoomSequenceNumber={handleUpdateAutoRoomSequenceNumber}
                 />
               )
            ) : (
@@ -1200,7 +1340,7 @@ export default function App() {
            </button>
          </div>
          <PlayerLobby 
-           appState={appState} 
+           autoRoomEnabled={autoRoomEnabled} appState={appState} 
            onJoinRoom={handleJoinRoom} 
            onEnterRoom={(id) => setAppState(prev => ({ ...prev, view: 'player_game', currentRoomId: id }))} 
            onOpenProfile={() => setAppState(prev => ({ ...prev, view: 'profile' }))}

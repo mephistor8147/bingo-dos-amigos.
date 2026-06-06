@@ -102,14 +102,14 @@ export function Dashboard({ gameState, onDrawNumber, onResetGame, isAutoDraw, on
   }, [currentNumber]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8" onClick={unlockAudio}>
+    <div className="max-w-4xl mx-auto space-y-4" onClick={unlockAudio}>
       {bgMusicUrl && (
          <audio ref={customAudioRef} src={bgMusicUrl} loop preload="auto" />
       )}
       <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-        <div className="p-6 md:p-16 text-center flex flex-col items-center relative">
+        <div className="p-4 md:p-8 text-center flex flex-col items-center relative">
           
-          <div className="absolute top-6 right-6 flex items-center gap-2">
+          <div className="absolute top-4 right-4 flex items-center gap-1.5">
             <button 
               onClick={toggleSoundEffects}
               title={soundEnabled ? "Pausar Efeitos Sonoros" : "Tocar Efeitos Sonoros"}
@@ -143,9 +143,9 @@ export function Dashboard({ gameState, onDrawNumber, onResetGame, isAutoDraw, on
             </button>
           </div>
 
-          <h2 className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-8 font-bold">Painel de Sorteio</h2>
+          <h2 className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-4 font-bold">Painel de Sorteio</h2>
           
-          <div className="w-64 h-64 md:w-[320px] md:h-[320px] mx-auto rounded-full flex items-center justify-center relative mb-12">
+          <div className="w-56 h-56 md:w-[280px] md:h-[280px] mx-auto rounded-full flex items-center justify-center relative mb-6">
              <AnimatePresence>
                {isAnimating && (
                  <motion.div
@@ -263,8 +263,8 @@ export function Dashboard({ gameState, onDrawNumber, onResetGame, isAutoDraw, on
           </div>
         </div>
         
-        <div className="bg-slate-50 p-6 md:p-8 border-t border-slate-100">
-           <div className="flex items-center justify-between mb-6">
+        <div className="bg-slate-50 p-4 md:p-5 border-t border-slate-100">
+           <div className="flex items-center justify-between mb-4">
              <h3 className="text-xs uppercase tracking-widest text-slate-500 font-bold">Números Sorteados ({gameState.drawnNumbers.length})</h3>
              {gameState.drawnNumbers.length >= 30 && (
                <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">

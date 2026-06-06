@@ -26,7 +26,7 @@ export interface Player {
   card: BingoCardData;
 }
 
-export type GameMode = 'full_card' | 'line' | 'block_of_4';
+export type GameMode = 'full_card' | 'line' | 'block_of_4' | 'bot_vs_bot';
 
 export interface Room {
   id: string;
@@ -42,6 +42,8 @@ export interface Room {
   prize?: number;
   bgMusicUrl?: string;
   onlineRadioUrl?: string;
+  backgroundImageUrl?: string;
+  roomIcon?: string;
   botsEnabled?: boolean;
   maxBots?: number;
   isAutoCreated?: boolean;

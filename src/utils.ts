@@ -26,20 +26,25 @@ export function generateBingoCard(id: string, playerName: string): BingoCardData
 }
 
 export function isCardWinner(card: BingoCardData, drawnNumbers: number[], gameMode: GameMode = 'full_card') {
+  if (!card || !card.grid || !Array.isArray(card.grid)) return false;
   const checkMarked = (r: number, c: number) => {
     if (r < 0 || r > 4 || c < 0 || c > 4) return false;
-    const cell = card.grid[r][c];
+    const row = card.grid[r];
+    if (!row) return false;
+    const cell = row[c];
     return cell === 'FREE' || drawnNumbers.includes(cell as number);
   };
 
-  if (gameMode === 'full_card') {
+  const effectiveMode = gameMode === 'bot_vs_bot' ? 'full_card' : gameMode;
+
+  if (effectiveMode === 'full_card') {
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
         if (!checkMarked(r, c)) return false;
       }
     }
     return true;
-  } else if (gameMode === 'line') {
+  } else if (effectiveMode === 'line') {
     for (let r = 0; r < 5; r++) {
       let rowWin = true;
       for (let c = 0; c < 5; c++) {
@@ -54,7 +59,7 @@ export function isCardWinner(card: BingoCardData, drawnNumbers: number[], gameMo
       }
       if (colWin) return true;
     }
-  } else if (gameMode === 'block_of_4') {
+  } else if (effectiveMode === 'block_of_4') {
     // Verifica 16 possíveis blocos de 2x2 dentro da cartela 5x5
     for (let r = 0; r <= 3; r++) {
       for (let c = 0; c <= 3; c++) {
