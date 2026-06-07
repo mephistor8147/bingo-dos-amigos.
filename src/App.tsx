@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppState, Room, BingoCardData, GameMode } from './types';
 import { AdminRooms } from './components/AdminRooms';
 import { PlayerLobby } from './components/PlayerLobby';
@@ -11,8 +11,10 @@ import { AdminUsers } from './components/AdminUsers';
 import { Toaster, toast } from 'react-hot-toast';
 import { Moon, Sun, LogOut } from 'lucide-react';
 import { generateBingoCard, isCardWinner, serializeGrid, deserializeGrid } from './utils';
+import { audioController } from './audioUtils';
 
 export default function App() {
+  const isCreatingAutoRoomRef = useRef(false);
   const [appState, setAppState] = useState<AppState & { showAuth?: boolean }>(() => {
     let savedSettings = { soundEnabled: true, notificationsEnabled: true, darkMode: false };
     try {
@@ -551,7 +553,9 @@ export default function App() {
 
   // Criação automática de salas: se ativado, agenda uma nova se não houver nenhuma agendada
   const triggerAutoRoomCreation = async () => {
+    if (isCreatingAutoRoomRef.current) return;
     try {
+      isCreatingAutoRoomRef.current = true;
       const { doc, setDoc, getDoc } = await import('firebase/firestore');
       const { db } = await import('./lib/firebase');
 
@@ -620,6 +624,8 @@ export default function App() {
       console.log("Automatic Scheduled Room created.");
     } catch (e) {
       console.error("Auto room creator failure:", e);
+    } finally {
+      isCreatingAutoRoomRef.current = false;
     }
   };
 
@@ -647,7 +653,7 @@ export default function App() {
       const totalActiveAutoRooms = autoRooms.filter(r => r.status === 'waiting' || r.status === 'active').length;
       const hasUpcomingAutoRoom = autoRooms.some(r => r.status === 'waiting');
       
-      if (!hasUpcomingAutoRoom && totalActiveAutoRooms < 3 && appState.rooms.length > 0) {
+      if (!hasUpcomingAutoRoom && totalActiveAutoRooms < 3) {
         triggerAutoRoomCreation();
       }
     }, 10000);
@@ -1276,7 +1282,10 @@ export default function App() {
                 <AdminRooms 
                   rooms={appState.rooms} 
                   onCreateRoom={handleCreateRoom} 
-                  onEnterRoom={(id) => setAppState(prev => ({ ...prev, currentRoomId: id }))} 
+                  onEnterRoom={(id) => {
+                    audioController.init();
+                    setAppState(prev => ({ ...prev, currentRoomId: id }));
+                  }} 
                   onDeleteRoom={handleDeleteRoom}
                   onUpdateRoomSettings={handleUpdateRoomSettings}
                   autoRoomEnabled={autoRoomEnabled}
@@ -1342,7 +1351,7 @@ export default function App() {
          <PlayerLobby 
            autoRoomEnabled={autoRoomEnabled} appState={appState} 
            onJoinRoom={handleJoinRoom} 
-           onEnterRoom={(id) => setAppState(prev => ({ ...prev, view: 'player_game', currentRoomId: id }))} 
+           onEnterRoom={(id) => { audioController.init(); setAppState(prev => ({ ...prev, view: 'player_game', currentRoomId: id })); }} 
            onOpenProfile={() => setAppState(prev => ({ ...prev, view: 'profile' }))}
          />
        </div>

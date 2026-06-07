@@ -14,6 +14,10 @@ export class AudioController {
     }
   }
 
+  public isUnlocked(): boolean {
+    return !!this.ctx && this.ctx.state === 'running';
+  }
+
   public playPop() {
     if (!this.ctx) return;
     this.init();
@@ -90,6 +94,84 @@ export class AudioController {
     gain.connect(this.ctx.destination);
     
     noise.start(t);
+  }
+
+  public playMarkCard() {
+    if (!this.ctx) return;
+    this.init();
+    
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, t);
+    osc.frequency.exponentialRampToValueAtTime(1400, t + 0.08);
+    
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.3, t + 0.01);
+    gain.gain.linearRampToValueAtTime(0, t + 0.08);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    osc.start(t);
+    osc.stop(t + 0.08);
+  }
+
+  public playChatMessage() {
+    if (!this.ctx) return;
+    this.init();
+    
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(550, t);
+    osc.frequency.setValueAtTime(800, t + 0.04);
+    
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.02);
+    gain.gain.linearRampToValueAtTime(0.12, t + 0.06);
+    gain.gain.linearRampToValueAtTime(0, t + 0.1);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    
+    osc.start(t);
+    osc.stop(t + 0.1);
+  }
+
+  public playWinnerFanfare() {
+    if (!this.ctx) return;
+    this.init();
+    
+    const t = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    const durations = [0.12, 0.12, 0.12, 0.6];
+    const delays = [0, 0.12, 0.24, 0.36];
+    
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + delays[idx]);
+      
+      gain.gain.setValueAtTime(0, t + delays[idx]);
+      gain.gain.linearRampToValueAtTime(0.25, t + delays[idx] + 0.03);
+      gain.gain.linearRampToValueAtTime(0, t + delays[idx] + durations[idx]);
+      
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      
+      osc.start(t + delays[idx]);
+      osc.stop(t + delays[idx] + durations[idx]);
+    });
+    
+    this.playCheer();
   }
 
   private bgOscillator: OscillatorNode | null = null;

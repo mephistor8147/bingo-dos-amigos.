@@ -108,7 +108,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     return DAUB_COLORS.find(c => c.id === selectedColorId) || DAUB_COLORS[0];
   }, [selectedColorId]);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(() => audioController.isUnlocked());
 
   const [bgVolume, setBgVolume] = useState(() => {
     try {
@@ -396,7 +396,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       const isOnCard = activeCard.grid.some(row => row.includes(lastDrawn));
       if (isOnCard && autoDaub) {
          setTimeout(() => {
-           audioController.playCoin();
+           audioController.playMarkCard();
          }, 300); // slight delay after the pop
       }
     }
@@ -410,6 +410,32 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     }, 1000);
     return () => clearInterval(interval);
   }, [scheduledTime]);
+
+  // Efeito sonoro ao receber uma nova mensagem no chat
+  const prevMessagesLength = useRef(messages?.length || 0);
+  useEffect(() => {
+    if (messages && messages.length > prevMessagesLength.current) {
+      if (soundEnabled && audioUnlocked) {
+        audioController.playChatMessage();
+      }
+    }
+    prevMessagesLength.current = messages?.length || 0;
+  }, [messages, soundEnabled, audioUnlocked]);
+
+  // Efeito sonoro quando um vencedor de cartela for anunciado na sala
+  const winnersCount = useMemo(() => {
+    return (playersList || []).filter(p => isCardWinner(p.card, drawnNumbers, gameMode)).length;
+  }, [playersList, drawnNumbers, gameMode]);
+  const prevWinnersCount = useRef(winnersCount);
+
+  useEffect(() => {
+    if (winnersCount > 0 && prevWinnersCount.current === 0) {
+      if (soundEnabled && audioUnlocked) {
+        audioController.playWinnerFanfare();
+      }
+    }
+    prevWinnersCount.current = winnersCount;
+  }, [winnersCount, soundEnabled, audioUnlocked]);
 
   useEffect(() => {
     if (isSpectator) return;
@@ -511,17 +537,27 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     if (isSpectator) return;
     if (value === 'FREE') return;
     const key = `${rIdx}-${cIdx}`;
+
+    // Unlock audio context on direct action
+    if (!audioUnlocked) {
+      setAudioUnlocked(true);
+      audioController.init();
+    }
+
     setMarkedSpaces(prev => {
       const next = new Set(prev);
       if (next.has(key)) {
         next.delete(key);
+        if (soundEnabled) {
+          audioController.playMarkCard();
+        }
       } else {
         // Allow marking manually if the number was drawn, or if we want to allow mistakes we could just let them mark anyway.
         // For standard bingo, usually you can validly DAUB. Let's allow valid daubs:
         if (drawnNumbers.includes(value as number)) {
            next.add(key);
-           if (soundEnabled && audioUnlocked) {
-             audioController.playCoin();
+           if (soundEnabled) {
+             audioController.playMarkCard();
            }
         }
       }
@@ -545,7 +581,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
          <div className="absolute top-0 inset-x-0 h-1/3 bg-gradient-to-b from-sky-300 to-emerald-500 opacity-60"></div>
          <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-emerald-600 to-transparent"></div>
          {/* Simple floral/cloud decor could go here, but CSS gradients do the trick */}
-         <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-full">
+      </div>
+      <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-full">
         {!isHeaderExpanded ? (
           <div className="flex justify-end w-full mb-2 px-1 relative z-50 animate-in fade-in slide-in-from-top-1 duration-200">
             <button
@@ -816,7 +853,6 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
             )}
           </div>
         )}
-      </div>
 
         {/* Admin Participant Cards Miniature Section */}
         {user.role === 'admin' && (
