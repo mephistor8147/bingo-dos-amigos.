@@ -81,6 +81,14 @@ const formatTime = (seconds: number) => {
 export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList, theme = 'emerald' }: PlayerMobileViewProps) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
 
+  const hasInitializedSpectator = useRef(false);
+  useEffect(() => {
+    if (isSpectator && !hasInitializedSpectator.current && playersList && playersList.length > 0) {
+      setSelectedParticipantId(playersList[0].id);
+      hasInitializedSpectator.current = true;
+    }
+  }, [isSpectator, playersList]);
+
   const activeCard = useMemo(() => {
     if (isSpectator && selectedParticipantId) {
       const selectedPlayer = (playersList || []).find(p => p.id === selectedParticipantId);
@@ -597,6 +605,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSpectator) return;
     if (!chatMessage.trim()) return;
     onSendMessage(chatMessage);
     setChatMessage('');
@@ -812,7 +821,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                       title={isRadioPlaying ? "Pausar rádio online" : "Escutar rádio online"}
                       className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm ${
                         isRadioPlaying 
-                          ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse shadow-indigo-600/10' 
+                          ? 'bg-indigo-600 border-indigo-500 text-white animate-pulse shadow-indigo-600/10' 
                           : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                       }`}
                     >
@@ -826,11 +835,11 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                     title={voiceActive ? "Desativar Canal de Voz" : "Ativar Canal de Voz"}
                     className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm ${
                       voiceActive 
-                        ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse' 
+                        ? 'bg-indigo-600 border-indigo-500 text-white animate-pulse' 
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
-                    {voiceActive ? <Mic className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300" /> : <MicOff className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 dark:text-slate-505" />}
+                    {voiceActive ? <Mic className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300" /> : <MicOff className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 dark:text-slate-500" />}
                   </button>
 
                   {/* Sound Controls */}
@@ -877,13 +886,13 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                     <button 
                       onClick={() => setIsColorPickerOpen(!isColorPickerOpen)} 
                       title="Escolher Cor de Marcação"
-                      className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-505 border-slate-205 dark:border-slate-700 hover:bg-slate-100 ${isColorPickerOpen ? 'ring-2 ring-indigo-500 border-transparent shadow-md' : ''}`}
+                      className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100 ${isColorPickerOpen ? 'ring-2 ring-indigo-500 border-transparent shadow-md' : ''}`}
                     >
                       <Palette className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-550 dark:text-indigo-400" />
                     </button>
                     {isColorPickerOpen && (
                       <div className="absolute right-0 top-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xl z-50 flex flex-col gap-2 min-w-[210px] animate-in fade-in slide-in-from-top-2 duration-150">
-                        <span className="text-[10px] font-black text-slate-400 dark:text-slate-505 uppercase tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1 mb-1 text-center">
+                        <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1 mb-1 text-center">
                           Cor de Marcação
                         </span>
                         <div className="grid grid-cols-3 gap-1.5">
@@ -964,7 +973,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                      })}
                    </div>
                    {participants.length === 0 && (
-                     <span className="text-slate-400 dark:text-slate-505 text-xs font-semibold">Nenhum participante ativo</span>
+                    <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold">Nenhum participante ativo</span>
                    )}
                 </div>
 
@@ -1042,7 +1051,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                 );
               })}
               {(!playersList || playersList.length === 0) && (
-                <div className="col-span-full text-center text-slate-400 dark:text-slate-505 font-bold py-8 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 px-4">
+                <div className="col-span-full text-center text-slate-400 dark:text-slate-500 font-bold py-8 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 px-4">
                   Nenhum jogador na sala ainda.
                 </div>
               )}
@@ -1064,7 +1073,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                 const isCurrent = i === 0;
                 let colorClass = 'from-red-500 to-red-600 text-white';
                 if (num > 15 && num <= 30) colorClass = 'from-purple-500 to-purple-600 text-white';
-                else if (num > 30 && num <= 45) colorClass = 'from-amber-400 to-amber-500 text-slate-905';
+                else if (num > 30 && num <= 45) colorClass = 'from-amber-400 to-amber-500 text-slate-900';
                 else if (num > 45 && num <= 60) colorClass = 'from-emerald-500 to-emerald-600 text-white';
                 else if (num > 60) colorClass = 'from-sky-500 to-sky-600 text-white';
 
@@ -1088,8 +1097,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                     transition={isCurrent ? { type: "spring", stiffness: 220, damping: 14 } : { duration: 0.35 }}
                     className={`rounded-full flex flex-col items-center justify-center font-black relative overflow-hidden select-none border-b-4 border-black/25 ${
                       isCurrent 
-                        ? `w-20 h-20 sm:w-22 sm:h-22 text-slate-900 bg-gradient-to-br ${colorClass} z-20 border-t-2 border-white/50 ring-4 ring-indigo-500/20` 
-                        : `w-12 h-12 sm:w-14 sm:h-14 text-slate-800 bg-gradient-to-br ${colorClass} z-10 border-t border-white/30 opacity-75`
+                        ? `w-20 h-20 sm:w-22 sm:h-22 bg-gradient-to-br ${colorClass} z-20 border-t-2 border-white/50 ring-4 ring-indigo-500/20` 
+                        : `w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br ${colorClass} z-10 border-t border-white/30 opacity-75`
                     }`}
                   >
                     {/* Glossy Overlay Highlight */}
@@ -1118,7 +1127,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
 
                     {/* Ping/Ring aura for current ball */}
                     {isCurrent && (
-                      <span className="absolute -inset-1 rounded-full border border-indigo-505 animate-pulse opacity-40 pointer-events-none" />
+                      <span className="absolute -inset-1 rounded-full border border-indigo-500 animate-pulse opacity-40 pointer-events-none" />
                     )}
                   </motion.div>
                 );
@@ -1146,7 +1155,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
         {isSpectator && (playersList || []).length > 0 && (
           <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-3xl mb-4 max-w-[500px] w-full mx-auto shadow-sm">
             <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-505 animate-pulse" />
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
               <span>Painel de Simulação - Ver Participante:</span>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -1226,7 +1235,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
             {/* Native Desktop Chat */}
             <div className="hidden lg:flex flex-col bg-white/95 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden h-[420px] w-full">
               {/* Header */}
-              <div className="bg-indigo-600 dark:bg-indigo-750 px-4 py-3 flex items-center justify-between text-white border-b border-indigo-505/30">
+              <div className="bg-indigo-600 dark:bg-indigo-750 px-4 py-3 flex items-center justify-between text-white border-b border-indigo-500/30">
                 <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider">
                   <MessageCircle className="w-3.5 h-3.5 text-indigo-200"/>
                   <span>Chat da Sala ({messages.length})</span>
@@ -1236,7 +1245,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
               {/* Messages list with much higher text contrast */}
               <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 dark:bg-slate-950/40">
                  {messages.length === 0 ? (
-                   <div className="text-center text-slate-400 dark:text-slate-505 text-xs mt-10 font-bold">Nenhuma mensagem ainda.</div>
+                   <div className="text-center text-slate-400 dark:text-slate-500 text-xs mt-10 font-bold">Nenhuma mensagem ainda.</div>
                  ) : (
                    messages.map(msg => {
                      const isMe = msg.senderId === user.uid;
