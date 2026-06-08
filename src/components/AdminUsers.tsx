@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { User } from '../types';
 import { Loader2, Coins, Save, ArrowLeft } from 'lucide-react';
@@ -26,6 +26,7 @@ export function AdminUsers({ onGoBack }: AdminUsersProps) {
       } catch (err) {
         console.error('Failed to fetch users', err);
         toast.error('Erro ao buscar usuários');
+        handleFirestoreError(err, OperationType.GET, 'users');
       } finally {
         setLoading(false);
       }
@@ -52,6 +53,7 @@ export function AdminUsers({ onGoBack }: AdminUsersProps) {
     } catch (err) {
       console.error('Failed to update coins', err);
       toast.error('Erro ao atualizar saldo');
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { auth, db } from '../lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
@@ -37,7 +37,12 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
         const userCredential = await getRedirectResult(auth);
         if (userCredential) {
           const userRef = doc(db, 'users', userCredential.user.uid);
-          const userDoc = await getDoc(userRef);
+          let userDoc;
+          try {
+            userDoc = await getDoc(userRef);
+          } catch (dbErr) {
+            handleFirestoreError(dbErr, OperationType.GET, `users/${userCredential.user.uid}`);
+          }
           
           let userData;
           if (!userDoc.exists()) {
@@ -50,7 +55,11 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
               role: autoAdmin,
               coins: autoAdmin === 'admin' ? 0 : 500
             };
-            await setDoc(userRef, userData);
+            try {
+              await setDoc(userRef, userData);
+            } catch (dbErr) {
+              handleFirestoreError(dbErr, OperationType.CREATE, `users/${userCredential.user.uid}`);
+            }
           } else {
             userData = userDoc.data();
           }
@@ -83,7 +92,12 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
     try {
       if (isLogin) {
         const userCredential = await signInWithEmailAndPassword(auth, mockEmail, password);
-        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+        let userDoc;
+        try {
+          userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+        } catch (dbErr) {
+          handleFirestoreError(dbErr, OperationType.GET, `users/${userCredential.user.uid}`);
+        }
         if (userDoc.exists()) {
           const data = userDoc.data();
           onLoginSuccess(data, data.role || 'player');
@@ -113,7 +127,11 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
           coins: 500,
           role: 'player'
         };
-        await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
+        try {
+          await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
+        } catch (dbErr) {
+          handleFirestoreError(dbErr, OperationType.CREATE, `users/${userCredential.user.uid}`);
+        }
         onLoginSuccess(newUser, 'player');
       }
     } catch (err: any) {
@@ -159,7 +177,12 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
     try {
       if (!userCredential) return;
       const userRef = doc(db, 'users', userCredential.user.uid);
-      const userDoc = await getDoc(userRef);
+      let userDoc;
+      try {
+        userDoc = await getDoc(userRef);
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.GET, `users/${userCredential.user.uid}`);
+      }
       
       let userData;
       if (!userDoc.exists()) {
@@ -172,7 +195,11 @@ export function AuthScreen({ onLoginSuccess, onGoBack }: AuthScreenProps) {
           role: autoAdmin,
           coins: autoAdmin === 'admin' ? 0 : 500
         };
-        await setDoc(userRef, userData);
+        try {
+          await setDoc(userRef, userData);
+        } catch (dbErr) {
+          handleFirestoreError(dbErr, OperationType.CREATE, `users/${userCredential.user.uid}`);
+        }
       } else {
         userData = userDoc.data();
       }

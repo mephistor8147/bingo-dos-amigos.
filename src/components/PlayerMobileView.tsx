@@ -46,6 +46,7 @@ interface PlayerMobileViewProps {
   winners?: { uid: string; name: string; avatar?: string }[];
   roomStatus?: 'waiting' | 'active' | 'finished';
   playersList?: { id: string; name: string; card: BingoCardData }[];
+  theme?: string;
 }
 
 const COLUMN_COLORS = [
@@ -77,7 +78,7 @@ const formatTime = (seconds: number) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList }: PlayerMobileViewProps) {
+export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList, theme = 'emerald' }: PlayerMobileViewProps) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
 
   const activeCard = useMemo(() => {
@@ -103,12 +104,55 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   const [showBingoAnimation, setShowBingoAnimation] = useState(false);
   const [localTimeLeft, setLocalTimeLeft] = useState(initialTimeLeft);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const desktopChatBottomRef = useRef<HTMLDivElement>(null);
   const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const currentDaubColor = useMemo(() => {
     return DAUB_COLORS.find(c => c.id === selectedColorId) || DAUB_COLORS[0];
   }, [selectedColorId]);
+
+  const themeColors = useMemo(() => {
+    switch(theme) {
+      case 'ocean':
+        return {
+          bgColor: 'bg-sky-600',
+          gradientSky: 'from-blue-400 to-sky-600',
+          gradientBottom: 'from-sky-700 to-transparent',
+          borderAccent: 'border-sky-400/30'
+        };
+      case 'sunset':
+        return {
+          bgColor: 'bg-orange-500',
+          gradientSky: 'from-amber-300 to-orange-500',
+          gradientBottom: 'from-orange-600 to-transparent',
+          borderAccent: 'border-orange-400/30'
+        };
+      case 'royal':
+        return {
+          bgColor: 'bg-indigo-950',
+          gradientSky: 'from-purple-800 to-indigo-950',
+          gradientBottom: 'from-indigo-950 to-transparent',
+          borderAccent: 'border-purple-400/30'
+        };
+      case 'cherry':
+        return {
+          bgColor: 'bg-pink-500',
+          gradientSky: 'from-rose-300 to-pink-500',
+          gradientBottom: 'from-pink-600 to-transparent',
+          borderAccent: 'border-pink-400/30'
+        };
+      case 'emerald':
+      default:
+        return {
+          bgColor: 'bg-emerald-500',
+          gradientSky: 'from-sky-300 to-emerald-500',
+          gradientBottom: 'from-emerald-600 to-transparent',
+          borderAccent: 'border-emerald-400/30'
+        };
+    }
+  }, [theme]);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(true);
   const [audioUnlocked, setAudioUnlocked] = useState(() => audioController.isUnlocked());
+  const [recentTexters, setRecentTexters] = useState<Record<string, boolean>>({});
 
   const [bgVolume, setBgVolume] = useState(() => {
     try {
@@ -411,15 +455,34 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     return () => clearInterval(interval);
   }, [scheduledTime]);
 
-  // Efeito sonoro ao receber uma nova mensagem no chat
+  // Efeito sonoro e brilho ao receber uma nova mensagem no chat
   const prevMessagesLength = useRef(messages?.length || 0);
   useEffect(() => {
+    let timeoutId: any;
     if (messages && messages.length > prevMessagesLength.current) {
       if (soundEnabled && audioUnlocked) {
         audioController.playChatMessage();
       }
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.senderId) {
+        const senderId = lastMsg.senderId;
+        setRecentTexters(prev => ({
+          ...prev,
+          [senderId]: true
+        }));
+        timeoutId = setTimeout(() => {
+          setRecentTexters(prev => {
+            const next = { ...prev };
+            delete next[senderId];
+            return next;
+          });
+        }, 4000);
+      }
     }
     prevMessagesLength.current = messages?.length || 0;
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [messages, soundEnabled, audioUnlocked]);
 
   // Efeito sonoro quando um vencedor de cartela for anunciado na sala
@@ -526,6 +589,12 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     }
   }, [messages, isChatOpen]);
 
+  useEffect(() => {
+    if (desktopChatBottomRef.current) {
+      desktopChatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatMessage.trim()) return;
@@ -569,7 +638,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   const recentDrawn = [...drawnNumbers].reverse().slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-emerald-500 font-sans text-slate-800 flex flex-col justify-start pb-8 relative overflow-hidden" onClick={unlockAudio} onTouchStart={unlockAudio}>
+    <div className={`min-h-screen ${themeColors.bgColor} font-sans text-slate-800 flex flex-col justify-start pb-8 relative overflow-y-auto`} onClick={unlockAudio} onTouchStart={unlockAudio}>
       {bgMusicUrl && (
          <audio ref={customAudioRef} src={bgMusicUrl} loop preload="auto" />
       )}
@@ -578,55 +647,121 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       )}
       {/* Background Decor (Simulating the grassy field & sky from image) */}
       <div className="absolute inset-0 pointer-events-none z-0">
-         <div className="absolute top-0 inset-x-0 h-1/3 bg-gradient-to-b from-sky-300 to-emerald-500 opacity-60"></div>
-         <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-emerald-600 to-transparent"></div>
-         {/* Simple floral/cloud decor could go here, but CSS gradients do the trick */}
+         <div className={`absolute top-0 inset-x-0 h-1/3 bg-gradient-to-b ${themeColors.gradientSky} opacity-60`}></div>
+         <div className={`absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t ${themeColors.gradientBottom}`}></div>
       </div>
-      <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-full">
+      <div className="relative z-10 w-full max-w-5xl mx-auto pt-safe px-4 flex flex-col h-auto">
         {!isHeaderExpanded ? (
-          <div className="flex justify-end w-full mb-2 px-1 relative z-50 animate-in fade-in slide-in-from-top-1 duration-200">
-            <button
-              onClick={() => setIsHeaderExpanded(true)}
-              className="p-3 bg-white/95 dark:bg-slate-900 border border-emerald-300 dark:border-slate-800 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center shrink-0"
-              title="Exibir Painel de Controle"
-            >
-              <Eye className="w-5 h-5 text-emerald-600 dark:text-emerald-450" />
-            </button>
+          <div className={`flex items-center justify-between w-full mb-4 px-3.5 py-2.5 bg-white/95 dark:bg-slate-900 border ${themeColors.borderAccent} dark:border-slate-800 rounded-3xl relative z-50 animate-in fade-in slide-in-from-top-1 duration-200 shadow-xl backdrop-blur-sm`} onClick={(e) => e.stopPropagation()}>
+            {/* Left part: Miniature list of participants, highlighting our own */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 pr-4">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-1.5 md:block hidden animate-none">
+                Participantes:
+              </span>
+              <div className="flex -space-x-2 shrink-0 items-center">
+                {participants.map((p, idx) => {
+                  const isMe = p.uid === user.uid;
+                  const isSpeaking = speakersState[p.uid]?.isSpeaking && voiceActive;
+                  const isVoiceUser = connectedVoicePlayers.has(p.uid) && voiceActive;
+                  const isGlowing = recentTexters[p.uid];
+                  return (
+                    <div 
+                      key={p.uid} 
+                      className={`w-8 h-8 rounded-full border-2 bg-white dark:bg-slate-800 overflow-hidden shadow-sm flex-shrink-0 transition-all duration-300 relative animate-in zoom-in-50 duration-300 ease-out fill-mode-both ${
+                        isGlowing
+                          ? 'border-cyan-400 dark:border-cyan-400 ring-4 ring-cyan-300 dark:ring-cyan-500 scale-125 z-55 shadow-lg shadow-cyan-400/50 animate-pulse'
+                          : isMe 
+                          ? 'border-amber-500 ring-4 ring-amber-400/75 scale-125 z-40 mx-2 shadow-lg shadow-amber-500/30' 
+                          : isSpeaking 
+                          ? 'border-green-500 ring-2 ring-green-400/40 z-10 scale-110' 
+                          : (isVoiceUser ? 'border-indigo-400' : 'border-emerald-400 dark:border-emerald-600')
+                      }`} 
+                      style={{ animationDelay: `${idx * 40}ms` }}
+                      title={`${p.name} ${isMe ? '(Você)' : ''} ${isVoiceUser ? '(Canal de Voz)' : ''}`}
+                    >
+                      {p.avatar ? (
+                        <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-black text-xs uppercase animate-none">
+                          {p.name.charAt(0)}
+                        </div>
+                      )}
+                      
+                      {/* Highlight Star overlay for current user */}
+                      {isMe && (
+                        <div className="absolute bottom-0 right-0 bg-amber-500 p-0.5 rounded-full border border-white dark:border-slate-800 leading-none z-10 shadow-sm flex items-center justify-center animate-none" style={{ width: '12px', height: '12px' }}>
+                          <Star className="w-2 h-2 text-white fill-white" />
+                        </div>
+                      )}
+
+                      {/* Dynamic Voice Wave Animation Overlay */}
+                      {isSpeaking && (
+                        <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center animate-none">
+                          <span className="flex gap-0.5 justify-center items-center">
+                            <span className="w-0.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-0.5 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '100ms' }} />
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {participants.length === 0 && (
+                <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold animate-none">Nenhum participante ao vivo</span>
+              )}
+              {/* Highlight Note/Label for oneself */}
+              {participants.some(p => p.uid === user.uid) && (
+                <span className="text-[9px] font-black text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full uppercase border border-amber-200/30 shadow-sm leading-none shrink-0 ml-2 animate-pulse">
+                  Minha Foto
+                </span>
+              )}
+            </div>
+
+            {/* Right part: Toggle panel button */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setIsHeaderExpanded(true)}
+                className="h-7 w-7 sm:h-8 sm:w-8 bg-white dark:bg-slate-900 border border-emerald-300 dark:border-slate-800 rounded-xl text-emerald-600 dark:text-emerald-405 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-md hover:scale-110 active:scale-95 transition-all flex items-center justify-center shrink-0"
+                title="Exibir Painel de Controle"
+              >
+                <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
+              </button>
+            </div>
           </div>
         ) : (
           /* Top Unified Premium Header Card incorporating all circled top elements */
-          <div className="bg-white/95 dark:bg-slate-900 border border-emerald-400/30 dark:border-slate-800 rounded-3xl p-3 shadow-xl flex flex-col gap-3.5 w-full mb-4 z-10 transition-all duration-300" onClick={(e) => e.stopPropagation()}>
+          <div className={`bg-white/95 dark:bg-slate-900 border ${themeColors.borderAccent} dark:border-slate-800 rounded-3xl p-3 shadow-xl flex flex-col gap-3.5 w-full mb-4 z-10 transition-all duration-300`} onClick={(e) => e.stopPropagation()}>
             
             {/* Row 1: Profile and Action Controls */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 w-full">
               {/* Left side: profile details + Toggle Button */}
-              <div className="flex items-center justify-between w-full md:w-auto gap-3">
+              <div className="flex items-center justify-between w-full md:w-auto gap-2">
                 <div 
                   onClick={(e) => { e.stopPropagation(); onOpenProfile && onOpenProfile(); }}
-                  className="flex items-center gap-3 cursor-pointer hover:bg-emerald-50 dark:hover:bg-slate-800/60 p-1.5 rounded-2xl transition-all text-left"
+                  className="flex items-center gap-2 cursor-pointer hover:bg-emerald-50 dark:hover:bg-slate-800/60 p-1 rounded-xl transition-all text-left"
                 >
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border border-emerald-200 dark:border-slate-700 relative shrink-0">
-                     {user.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/> : <User className="w-6 h-6 text-slate-400" />}
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border border-emerald-200 dark:border-slate-700 relative shrink-0">
+                     {user.avatar ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover"/> : <User className="w-3.5 h-3.5 text-slate-400" />}
                      {voiceActive && isMyselfSpeaking && (
-                       <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center border-2 border-green-500 rounded-full">
+                       <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center border border-green-500 rounded-full">
                          <span className="flex gap-0.5 justify-center items-center">
-                           <span className="w-1 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
-                           <span className="w-1 h-4 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
-                           <span className="w-1 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
+                           <span className="w-0.5 h-1.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                           <span className="w-0.5 h-2.5 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
+                           <span className="w-0.5 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0.3s' }} />
                          </span>
                        </div>
                      )}
                   </div>
                   <div>
-                     <div className="text-slate-800 dark:text-slate-100 text-sm md:text-base font-black leading-tight tracking-tight">{user.name}</div>
-                     <div className="flex items-center gap-1.5 mt-0.5">
-                       <Coins className="w-4 h-4 text-amber-500 fill-amber-305 shrink-0" />
-                       <span className="text-amber-600 dark:text-amber-400 text-xs md:text-sm font-black">{user.coins.toLocaleString()}</span>
-                     </div>
+                      <div className="text-slate-800 dark:text-slate-100 text-xs md:text-sm font-black leading-tight tracking-tight">{user.name}</div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Coins className="w-2.5 h-2.5 text-amber-500 fill-amber-305 shrink-0" />
+                        <span className="text-amber-600 dark:text-amber-400 text-[10px] md:text-xs font-black">{user.coins.toLocaleString()}</span>
+                      </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {/* Chat Warning Notification Icon (Only visible when chat is closed and there are messages) */}
                   {!isChatOpen && messages.length > 0 && (
                     <button
@@ -639,49 +774,49 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                           }
                         }, 100);
                       }}
-                      className="relative p-2 rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-900 shadow-sm bg-amber-50 dark:bg-slate-900 active:scale-95 animate-bounce"
+                      className="relative h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-all flex items-center justify-center shrink-0 border border-amber-200 dark:border-amber-900 shadow-sm bg-amber-50 dark:bg-slate-900 active:scale-95 animate-bounce"
                       title="Novas mensagens no chat"
                     >
-                      <MessageCircle className="w-5 h-5 text-amber-500 animate-pulse" />
-                      <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-900 animate-ping"></span>
-                      <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                      <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 animate-pulse" />
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white dark:border-slate-900 animate-ping"></span>
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white dark:border-slate-900"></span>
                     </button>
                   )}
 
                   {/* Countdown Clock (Hidden when <= 0) */}
                   {localTimeLeft > 0 && (
-                    <div className="bg-red-50 dark:bg-red-950/40 border border-red-200/50 dark:border-red-900/40 rounded-xl px-2.5 h-10 flex items-center gap-1 shadow-sm shrink-0">
-                       <Clock className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-                       <span className="text-red-700 dark:text-red-400 font-black text-xs tracking-wider">{formatTime(localTimeLeft)}</span>
+                    <div className="bg-red-50 dark:bg-red-950/40 border border-red-200/50 dark:border-red-900/40 rounded-lg px-2 h-7 sm:h-8 flex items-center gap-1 shadow-sm shrink-0">
+                       <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-red-600 dark:text-red-400 shrink-0" />
+                       <span className="text-red-700 dark:text-red-400 font-extrabold text-[10px] sm:text-[11px] tracking-wider">{formatTime(localTimeLeft)}</span>
                     </div>
                   )}
 
                   {/* Icon toggle button */}
                   <button 
                     onClick={(e) => { e.stopPropagation(); setIsHeaderExpanded(!isHeaderExpanded); }}
-                    className="p-2 rounded-xl text-slate-500 hover:text-indigo-650 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 active:scale-95"
+                    className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg text-slate-500 hover:text-indigo-650 dark:text-slate-400 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 active:scale-95"
                     title={isHeaderExpanded ? "Ocultar detalhes" : "Mostrar detalhes"}
                   >
-                    {isHeaderExpanded ? <EyeOff className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /> : <Eye className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
+                    {isHeaderExpanded ? <EyeOff className="w-3" /> : <Eye className="w-3" />}
                   </button>
                 </div>
               </div>
 
               {/* Right side: game controls row */}
               {isHeaderExpanded && (
-                <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+                <div className="flex items-center gap-1.5 w-full md:w-auto justify-end flex-wrap">
                   {/* Online Radio Button Play/Pause Toggle */}
                   {onlineRadioUrl && (
                     <button 
                       onClick={toggleRadio} 
                       title={isRadioPlaying ? "Pausar rádio online" : "Escutar rádio online"}
-                      className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                      className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm ${
                         isRadioPlaying 
                           ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse shadow-indigo-600/10' 
                           : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                       }`}
                     >
-                      <Radio className={`w-4 h-4 ${isRadioPlaying ? 'text-indigo-200 animate-spin-slow' : 'text-slate-400 dark:text-slate-505'}`} />
+                      <Radio className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isRadioPlaying ? 'text-indigo-200 animate-spin-slow' : 'text-slate-400 dark:text-slate-550'}`} />
                     </button>
                   )}
 
@@ -689,38 +824,38 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                   <button 
                     onClick={toggleVoiceChat} 
                     title={voiceActive ? "Desativar Canal de Voz" : "Ativar Canal de Voz"}
-                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                    className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm ${
                       voiceActive 
                         ? 'bg-indigo-600 border-indigo-505 text-white animate-pulse' 
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                     }`}
                   >
-                    {voiceActive ? <Mic className="w-4 h-4 text-emerald-300" /> : <MicOff className="w-4 h-4 text-slate-400 dark:text-slate-505" />}
+                    {voiceActive ? <Mic className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-300" /> : <MicOff className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 dark:text-slate-505" />}
                   </button>
 
                   {/* Sound Controls */}
                   <button 
                     onClick={toggleSound} 
                     title="Áudio do Jogo"
-                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm shrink-0 ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-505 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
+                    className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm shrink-0 ${soundEnabled ? 'bg-emerald-500 border-emerald-400/30 text-white' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-555 border-slate-200 dark:border-slate-700 hover:bg-slate-100'}`}
                   >
-                    {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                    {soundEnabled ? <Volume2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : <VolumeX className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
                   </button>
 
                   {/* Adjustable Volume Slider wrapper */}
                   {soundEnabled && (
-                    <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 h-10 rounded-xl shadow-sm shrink-0">
-                      <Volume2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 h-7 sm:h-8 rounded-lg shadow-sm shrink-0">
+                      <Volume2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-400 shrink-0" />
                       <input 
                         type="range" 
                         min="0" 
                         max="100" 
                         value={bgVolume} 
                         onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                        className="w-16 sm:w-20 accent-emerald-500 h-1 cursor-pointer bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none" 
+                        className="w-12 sm:w-16 accent-emerald-500 h-1 cursor-pointer bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none" 
                         title="Volume do Som de Fundo"
                       />
-                      <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 w-6 text-right shrink-0">{bgVolume}%</span>
+                      <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 w-5 text-right shrink-0">{bgVolume}%</span>
                     </div>
                   )}
 
@@ -728,13 +863,13 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                   <button 
                     onClick={(e) => { e.stopPropagation(); setAutoDaub(!autoDaub); }} 
                     title="Marcação Automática"
-                    className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm ${
+                    className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm ${
                       autoDaub 
                         ? 'bg-indigo-600 border-indigo-400/30 text-white' 
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
                     }`}
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </button>
 
                   {/* Color Daub Color Chooser Button */}
@@ -742,12 +877,12 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                     <button 
                       onClick={() => setIsColorPickerOpen(!isColorPickerOpen)} 
                       title="Escolher Cor de Marcação"
-                      className={`h-10 w-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-505 border-slate-205 dark:border-slate-700 hover:bg-slate-100 ${isColorPickerOpen ? 'ring-2 ring-indigo-500 border-transparent shadow-md' : ''}`}
+                      className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg border transition-all active:scale-95 shadow-sm bg-slate-50 dark:bg-slate-800 text-slate-505 border-slate-205 dark:border-slate-700 hover:bg-slate-100 ${isColorPickerOpen ? 'ring-2 ring-indigo-500 border-transparent shadow-md' : ''}`}
                     >
-                      <Palette className="w-4 h-4 text-indigo-550 dark:text-indigo-400" />
+                      <Palette className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-550 dark:text-indigo-400" />
                     </button>
                     {isColorPickerOpen && (
-                      <div className="absolute right-0 top-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xl z-50 flex flex-col gap-2 min-w-[210px] animate-in fade-in slide-in-from-top-2 duration-150">
+                      <div className="absolute right-0 top-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-xl z-50 flex flex-col gap-2 min-w-[210px] animate-in fade-in slide-in-from-top-2 duration-150">
                         <span className="text-[10px] font-black text-slate-400 dark:text-slate-505 uppercase tracking-wider block border-b border-slate-100 dark:border-slate-800 pb-1 mb-1 text-center">
                           Cor de Marcação
                         </span>
@@ -773,8 +908,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                   </div>
 
                   {/* Exit Button */}
-                  <button onClick={onExit} className="w-10 h-10 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-655 dark:text-red-400 flex items-center justify-center border border-red-100 dark:border-red-900 active:scale-95 transition-all shadow-sm" title="Sair do Jogo">
-                     <ArrowLeft className="w-5 h-5" />
+                  <button onClick={onExit} className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/40 text-red-655 dark:text-red-400 flex items-center justify-center border border-red-100 dark:border-red-900 active:scale-95 transition-all shadow-sm" title="Sair do Jogo">
+                     <ArrowLeft className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   </button>
                 </div>
               )}
@@ -794,11 +929,14 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                      {participants.map((p, idx) => {
                        const isSpeaking = speakersState[p.uid]?.isSpeaking && voiceActive;
                        const isVoiceUser = connectedVoicePlayers.has(p.uid) && voiceActive;
+                       const isGlowing = recentTexters[p.uid];
                        return (
                          <div 
                            key={p.uid} 
                            className={`w-8 h-8 rounded-full border-2 bg-white dark:bg-slate-800 overflow-hidden shadow-sm flex-shrink-0 transition-all duration-200 relative ${
-                             isSpeaking 
+                             isGlowing
+                               ? 'border-cyan-400 dark:border-cyan-400 ring-4 ring-cyan-300 dark:ring-cyan-500 scale-125 z-55 shadow-lg shadow-cyan-400/50 animate-pulse'
+                               : isSpeaking 
                                ? 'border-green-500 scale-110 ring-2 ring-green-400/40 z-10' 
                                : (isVoiceUser ? 'border-indigo-400' : 'border-emerald-400 dark:border-emerald-600')
                            }`} 
@@ -912,7 +1050,11 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
           </div>
         )}
 
-        {/* Drawn Balls Animation Stage */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start mt-2 w-full z-10">
+          
+          {/* LEFT COLUMN: Draw panel, simulator panel, spectator warnings, bingo card */}
+          <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4 w-full">
+            {/* Drawn Balls Animation Stage */}
         <div className="flex flex-col items-center mb-4 bg-slate-100/50 dark:bg-slate-900/60 p-3 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-inner max-w-md mx-auto w-full">
           <span className="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2 select-none">Painel de Sorteio</span>
           <div className="flex items-center gap-4 h-28 justify-center w-full relative">
@@ -1077,68 +1219,151 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
           </div>
         </div>
 
-        {/* Chat Section & Participants */}
-        <div className="mt-4 flex-1 flex flex-col justify-end relative z-20 w-full max-w-[500px] mx-auto mb-16">
-           <button 
-             onClick={() => setIsChatOpen(!isChatOpen)}
-             className="mx-auto w-full max-w-[200px] bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-t-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-colors border-t border-x border-emerald-400"
-           >
-             <MessageCircle className="w-5 h-5"/>
-             {isChatOpen ? 'Fechar Chat' : 'Chat da Sala'}
-             {messages.length > 0 && !isChatOpen && (
-                <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full absolute -top-2 right-4 shadow-sm animate-pulse">
-                  {messages.length}
-                </span>
-             )}
-           </button>
+          </div>
 
-           <AnimatePresence>
-             {isChatOpen && (
-               <motion.div 
-                 initial={{ height: 0, opacity: 0 }}
-                 animate={{ height: 280, opacity: 1 }}
-                 exit={{ height: 0, opacity: 0 }}
-                 className="bg-white rounded-b-2xl rounded-t-none w-full shadow-2xl overflow-hidden flex flex-col border-x border-b border-emerald-400"
-               >
-                 <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
-                    {messages.length === 0 ? (
-                      <div className="text-center text-slate-400 text-sm mt-10">Nenhuma mensagem ainda.</div>
-                    ) : (
-                      messages.map(msg => {
-                        const isMe = msg.senderId === user.uid;
-                        return (
-                          <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                             <span className="text-[10px] font-bold text-slate-400 mb-0.5 px-1">{isMe ? 'Você' : msg.senderName}</span>
-                             <div className={`px-3 py-2 rounded-2xl max-w-[85%] text-sm ${isMe ? 'bg-emerald-500 text-white rounded-br-sm' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-sm'}`}>
-                               {msg.text}
-                             </div>
+          {/* RIGHT COLUMN: Chat and sidebar activities */}
+          <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-4 w-full lg:sticky lg:top-4">
+            {/* Native Desktop Chat */}
+            <div className="hidden lg:flex flex-col bg-white/95 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden h-[420px] w-full">
+              {/* Header */}
+              <div className="bg-indigo-600 dark:bg-indigo-750 px-4 py-3 flex items-center justify-between text-white border-b border-indigo-505/30">
+                <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider">
+                  <MessageCircle className="w-3.5 h-3.5 text-indigo-200"/>
+                  <span>Chat da Sala ({messages.length})</span>
+                </div>
+              </div>
+
+              {/* Messages list with much higher text contrast */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 dark:bg-slate-950/40">
+                 {messages.length === 0 ? (
+                   <div className="text-center text-slate-400 dark:text-slate-505 text-xs mt-10 font-bold">Nenhuma mensagem ainda.</div>
+                 ) : (
+                   messages.map(msg => {
+                     const isMe = msg.senderId === user.uid;
+                     return (
+                       <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                          <span className="text-[10px] font-black text-slate-900 dark:text-slate-200 mb-0.5 px-1">{isMe ? 'Você' : msg.senderName}</span>
+                          <div className={`px-3 py-1.5 rounded-2xl max-w-[85%] text-xs font-bold leading-normal ${isMe ? 'bg-indigo-650 text-white rounded-br-sm shadow-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-950 dark:text-white rounded-bl-sm shadow-sm font-extrabold'}`}>
+                            {msg.text}
                           </div>
-                        );
-                      })
-                    )}
-                    <div ref={chatBottomRef} />
-                 </div>
-                 
-                 <form onSubmit={handleSendMessage} className="p-2 bg-white border-t border-slate-100 flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      value={chatMessage}
-                      onChange={e => setChatMessage(e.target.value)}
-                      placeholder={isSpectator ? "Apenas jogadores podem usar o chat" : "Mensagem..."}
-                      disabled={isSpectator}
-                      className="flex-1 bg-slate-100 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                    />
-                    <button 
-                      type="submit" 
-                      disabled={isSpectator || !chatMessage.trim()}
-                      className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-300 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-colors active:scale-95"
-                    >
-                      <Send className="w-5 h-5"/>
-                    </button>
-                 </form>
-               </motion.div>
-             )}
-           </AnimatePresence>
+                       </div>
+                     );
+                   })
+                 )}
+                 <div ref={desktopChatBottomRef} />
+              </div>
+              
+              {/* Input form */}
+              <form onSubmit={handleSendMessage} className="p-2.5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                 <input 
+                   type="text" 
+                   value={chatMessage}
+                   onChange={e => setChatMessage(e.target.value)}
+                   placeholder={isSpectator ? "Apenas jogadores podem usar o chat" : "Mensagem..."}
+                   disabled={isSpectator}
+                   className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-805 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                 />
+                 <button 
+                   type="submit" 
+                   disabled={isSpectator || !chatMessage.trim()}
+                   className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white w-8 h-8 rounded-xl flex items-center justify-center transition-colors active:scale-95 shrink-0 cursor-pointer"
+                 >
+                   <Send className="w-4 h-4"/>
+                 </button>
+              </form>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Floating Chat Button & Card (Mobile only) */}
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none lg:hidden" onClick={(e) => e.stopPropagation()}>
+          {/* Chat Window */}
+          <AnimatePresence>
+            {isChatOpen && (
+              <motion.div 
+                initial={{ opacity: 0, y: 40, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 40, scale: 0.9 }}
+                className="pointer-events-auto bg-white/95 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl w-[calc(100vw-32px)] sm:w-96 h-80 shadow-2xl flex flex-col overflow-hidden mb-4 mr-0"
+              >
+                {/* Header */}
+                <div className="bg-indigo-600 dark:bg-indigo-750 px-4 py-2.5 flex items-center justify-between text-white border-b border-indigo-500/30">
+                  <div className="flex items-center gap-2 font-black text-xs uppercase tracking-wider">
+                    <MessageCircle className="w-3.5 h-3.5 text-indigo-200"/>
+                    <span>Chat da Sala ({messages.length})</span>
+                  </div>
+                  <button 
+                    onClick={() => setIsChatOpen(false)}
+                    className="hover:bg-indigo-700/60 p-1.5 rounded-lg text-white font-extrabold text-[10px] transition-all cursor-pointer"
+                  >
+                    Fechar
+                  </button>
+                </div>
+
+                {/* Messages list */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 dark:bg-slate-950/40">
+                   {messages.length === 0 ? (
+                     <div className="text-center text-slate-400 dark:text-slate-550 text-xs mt-10">Nenhuma mensagem ainda.</div>
+                   ) : (
+                     messages.map(msg => {
+                       const isMe = msg.senderId === user.uid;
+                       return (
+                         <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                            <span className="text-[10px] font-black text-slate-900 dark:text-slate-205 mb-0.5 px-1">{isMe ? 'Você' : msg.senderName}</span>
+                            <div className={`px-3 py-1.5 rounded-2xl max-w-[85%] text-xs font-bold leading-normal ${isMe ? 'bg-indigo-650 text-white rounded-br-sm shadow-sm font-bold' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-950 dark:text-white rounded-bl-sm shadow-sm font-extrabold'}`}>
+                              {msg.text}
+                            </div>
+                         </div>
+                       );
+                     })
+                   )}
+                   <div ref={chatBottomRef} />
+                </div>
+                
+                {/* Input form */}
+                <form onSubmit={handleSendMessage} className="p-2.5 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                   <input 
+                     type="text" 
+                     value={chatMessage}
+                     onChange={e => setChatMessage(e.target.value)}
+                     placeholder={isSpectator ? "Apenas jogadores podem usar o chat" : "Mensagem..."}
+                     disabled={isSpectator}
+                     className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-805 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                   />
+                   <button 
+                     type="submit" 
+                     disabled={isSpectator || !chatMessage.trim()}
+                     className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white w-8 h-8 rounded-xl flex items-center justify-center transition-colors active:scale-95 shrink-0 cursor-pointer"
+                   >
+                     <Send className="w-4 h-4"/>
+                   </button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Toggle Floating Action Button */}
+          <button 
+            disabled={isChatOpen}
+            onClick={() => {
+              setIsChatOpen(true);
+              setTimeout(() => {
+                if (chatBottomRef.current) {
+                  chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+              }, 120);
+            }}
+            className={`pointer-events-auto h-14 w-14 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-2xl hover:scale-110 active:scale-90 transition-all border-2 border-white dark:border-slate-800 relative cursor-pointer ${isChatOpen ? 'opacity-0 scale-50 pointer-events-none' : 'opacity-100 scale-100 shadow-indigo-600/20'}`}
+            title="Chat da Sala"
+          >
+            <MessageCircle className="w-5 h-5 shrink-0"/>
+            {messages.length > 0 && (
+               <span className="absolute -top-1.5 -right-1.5 bg-red-500 hover:bg-red-650 text-white font-extrabold text-[10px] w-5 h-5 flex items-center justify-center rounded-full shadow-lg border border-white dark:border-slate-900 animate-pulse">
+                 {messages.length}
+               </span>
+            )}
+          </button>
         </div>
         
         {/* Bingo Animation Overlay */}

@@ -1,20 +1,53 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // Global Safety Net catch-all default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Users Collection
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(userId);
     }
+
+    // Rooms Collection
     match /rooms/{roomId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(roomId);
+
+      // Players subcollection
       match /players/{playerId} {
-        allow read, write: if request.auth != null;
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && isValidId(playerId);
       }
+
+      // Messages subcollection
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && isValidId(messageId);
       }
     }
+
+    // Settings Collection
     match /settings/{settingId} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(settingId);
     }
   }
 }

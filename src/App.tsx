@@ -55,13 +55,18 @@ export default function App() {
     let unsubPromise = (async () => {
       const { onAuthStateChanged } = await import('firebase/auth');
       const { getDoc, doc } = await import('firebase/firestore');
-      const { auth, db } = await import('./lib/firebase');
+      const { auth, db, handleFirestoreError, OperationType } = await import('./lib/firebase');
 
       return onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
           try {
-            const userSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
-            if (userSnap.exists()) {
+            let userSnap;
+            try {
+              userSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+            } catch (dbErr) {
+              handleFirestoreError(dbErr, OperationType.GET, `users/${firebaseUser.uid}`);
+            }
+            if (userSnap && userSnap.exists()) {
               const userData = userSnap.data();
               setAppState(prev => {
                 const isHome = prev.view === 'home';
@@ -108,10 +113,14 @@ export default function App() {
     if (!appState.currentUser) return;
     try {
       const { doc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
       
       const userRef = doc(db, 'users', appState.currentUser.uid);
-      await updateDoc(userRef, { photoURL });
+      try {
+        await updateDoc(userRef, { photoURL });
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.UPDATE, `users/${appState.currentUser.uid}`);
+      }
       
       setAppState(prev => ({
         ...prev,
@@ -141,7 +150,7 @@ export default function App() {
   const handleCreateRoom = async (partialRoom: Partial<Room & { botsEnabled?: boolean; maxBots?: number }>) => {
     try {
       const { doc, setDoc } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
 
       const newRoomId = Math.random().toString(36).substring(2, 9);
       
@@ -164,17 +173,22 @@ export default function App() {
         roomIcon: partialRoom.roomIcon || null,
         botsEnabled: finalBotsEnabled,
         maxBots: finalMaxBots,
-        isAutoCreated: false
+        isAutoCreated: false,
+        theme: partialRoom.theme || 'emerald'
       };
 
-      await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+      try {
+        await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.CREATE, `rooms/${newRoomId}`);
+      }
 
       // Create bots inside subcollection players if bots are enabled
       if (finalBotsEnabled && finalMaxBots && finalMaxBots > 0) {
         const botNames = [
-          "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
-          "Bot Lucas", "Bot Julia", "Bot Marcos", "Bot Fernanda", "Bot Felipe",
-          "Bot Gustavo", "Bot Patrícia", "Bot Alana", "Bot Ricardo", "Bot Aline"
+          "Arthur", "Daiane", "Camila", "Sandra", "Renato",
+          "Lucas", "Julia", "Marcos", "Fernanda", "Felipe",
+          "Gustavo", "Patrícia", "Alana", "Ricardo", "Aline"
         ];
         const shuffled = [...botNames].sort(() => 0.5 - Math.random());
         const count = Math.min(finalMaxBots, shuffled.length);
@@ -182,14 +196,18 @@ export default function App() {
         for (let i = 0; i < count; i++) {
           const botId = `bot_manual_${Math.random().toString(36).substring(2, 9)}`;
           const botCard = generateBingoCard(botId, shuffled[i]);
-          await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
-            name: shuffled[i],
-            card: {
-              id: botCard.id,
-              playerName: botCard.playerName,
-              grid: serializeGrid(botCard.grid)
-            }
-          });
+          try {
+            await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
+              name: shuffled[i],
+              card: {
+                id: botCard.id,
+                playerName: botCard.playerName,
+                grid: serializeGrid(botCard.grid)
+              }
+            });
+          } catch (dbErr) {
+            handleFirestoreError(dbErr, OperationType.CREATE, `rooms/${newRoomId}/players/${botId}`);
+          }
         }
       }
 
@@ -214,23 +232,31 @@ export default function App() {
 
     try {
       const { doc, setDoc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
       
       const userRef = doc(db, 'users', appState.currentUser.uid);
       const newCoins = appState.currentUser.coins - room.entryFee;
       
       // Update coins
-      await updateDoc(userRef, { coins: newCoins });
+      try {
+        await updateDoc(userRef, { coins: newCoins });
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.UPDATE, `users/${appState.currentUser.uid}`);
+      }
       
       // Add player to the room in Firestore
-      await setDoc(doc(db, 'rooms', roomId, 'players', appState.currentUser.uid), {
-        name: appState.currentUser.name,
-        card: {
-          id: card.id,
-          playerName: card.playerName,
-          grid: serializeGrid(card.grid)
-        }
-      });
+      try {
+        await setDoc(doc(db, 'rooms', roomId, 'players', appState.currentUser.uid), {
+          name: appState.currentUser.name,
+          card: {
+            id: card.id,
+            playerName: card.playerName,
+            grid: serializeGrid(card.grid)
+          }
+        });
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.CREATE, `rooms/${roomId}/players/${appState.currentUser.uid}`);
+      }
       
       setAppState(prev => {
         return {
@@ -252,15 +278,24 @@ export default function App() {
   const handleDrawNumberAdmin = async (roomId: string, num: number) => {
     try {
       const { doc, getDoc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
       
       const roomRef = doc(db, 'rooms', roomId);
-      const snap = await getDoc(roomRef);
-      if (snap.exists()) {
+      let snap;
+      try {
+        snap = await getDoc(roomRef);
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.GET, `rooms/${roomId}`);
+      }
+      if (snap && snap.exists()) {
         const currentDrawn = snap.data().drawnNumbers || [];
         if (!currentDrawn.includes(num)) {
           const nextDrawn = [...currentDrawn, num];
-          await updateDoc(roomRef, { drawnNumbers: nextDrawn });
+          try {
+            await updateDoc(roomRef, { drawnNumbers: nextDrawn });
+          } catch (dbErr) {
+            handleFirestoreError(dbErr, OperationType.UPDATE, `rooms/${roomId}`);
+          }
         }
       }
     } catch (e) {
@@ -271,11 +306,15 @@ export default function App() {
   const handleResetGameAdmin = async (roomId: string) => {
     try {
       const { doc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
-      await updateDoc(doc(db, 'rooms', roomId), { 
-        drawnNumbers: [],
-        status: 'waiting'
-      });
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
+      try {
+        await updateDoc(doc(db, 'rooms', roomId), { 
+          drawnNumbers: [],
+          status: 'waiting'
+        });
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.UPDATE, `rooms/${roomId}`);
+      }
       toast.success('Jogo reiniciado!');
     } catch (e) {
       console.error("Error resetting room in Firestore:", e);
@@ -285,8 +324,12 @@ export default function App() {
   const handleDeleteRoom = async (roomId: string) => {
     try {
       const { doc, deleteDoc } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
-      await deleteDoc(doc(db, 'rooms', roomId));
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
+      try {
+        await deleteDoc(doc(db, 'rooms', roomId));
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.DELETE, `rooms/${roomId}`);
+      }
     } catch (e) {
       console.error("Error deleting room from Firestore:", e);
     }
@@ -297,69 +340,93 @@ export default function App() {
     toast.success('Sala excluída.');
   };
 
-  const handleUpdateRoomSettings = async (roomId: string, name: string, botsEnabled: boolean, maxBots: number, backgroundImageUrl?: string, roomIcon?: string) => {
+  const handleUpdateRoomSettings = async (roomId: string, name: string, botsEnabled: boolean, maxBots: number, backgroundImageUrl?: string, roomIcon?: string, theme?: string) => {
     try {
       const { doc, getDocs, setDoc, deleteDoc, updateDoc, collection } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
+      const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
 
       // 1. Atualizar documento principal de sala
       const roomRef = doc(db, 'rooms', roomId);
-      await updateDoc(roomRef, {
-        name,
-        botsEnabled,
-        maxBots: botsEnabled ? maxBots : 0,
-        backgroundImageUrl: backgroundImageUrl || null,
-        roomIcon: roomIcon || null
-      });
+      try {
+        await updateDoc(roomRef, {
+          name,
+          botsEnabled,
+          maxBots: botsEnabled ? maxBots : 0,
+          backgroundImageUrl: backgroundImageUrl || null,
+          roomIcon: roomIcon || null,
+          theme: theme || 'emerald'
+        });
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.UPDATE, `rooms/${roomId}`);
+      }
 
       // 2. Ajustar quantidade e dados de bots na subcoleção de jogadores da sala
       const playersCol = collection(db, 'rooms', roomId, 'players');
-      const playersSnap = await getDocs(playersCol);
+      let playersSnap;
+      try {
+        playersSnap = await getDocs(playersCol);
+      } catch (dbErr) {
+        handleFirestoreError(dbErr, OperationType.GET, `rooms/${roomId}/players`);
+      }
       
       const botPlayersList: Array<{ id: string; name: string }> = [];
-      playersSnap.forEach(pDoc => {
-        if (pDoc.id.startsWith('bot_')) {
-          botPlayersList.push({ id: pDoc.id, name: pDoc.data().name });
-        }
-      });
+      if (playersSnap) {
+        playersSnap.forEach(pDoc => {
+          if (pDoc.id.startsWith('bot_')) {
+            botPlayersList.push({ id: pDoc.id, name: pDoc.data().name });
+          }
+        });
+      }
 
       if (!botsEnabled || maxBots <= 0) {
         // Remover todos os bots da subcoleção se desativados
         for (const bot of botPlayersList) {
-          await deleteDoc(doc(db, 'rooms', roomId, 'players', bot.id));
+          try {
+            await deleteDoc(doc(db, 'rooms', roomId, 'players', bot.id));
+          } catch (dbErr) {
+            handleFirestoreError(dbErr, OperationType.DELETE, `rooms/${roomId}/players/${bot.id}`);
+          }
         }
       } else {
         const currentCount = botPlayersList.length;
         if (currentCount < maxBots) {
           // Acrescentar novos bots necessários
           const botNames = [
-            "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
-            "Bot Lucas", "Bot Julia", "Bot Marcos", "Bot Fernanda", "Bot Felipe",
-            "Bot Gustavo", "Bot Marina"
+            "Arthur", "Daiane", "Camila", "Sandra", "Renato",
+            "Lucas", "Julia", "Marcos", "Fernanda", "Felipe",
+            "Gustavo", "Marina"
           ];
           const existingNames = botPlayersList.map(b => b.name);
           const availableNames = botNames.filter(n => !existingNames.includes(n));
           
           const needToAdd = maxBots - currentCount;
           for (let i = 0; i < needToAdd; i++) {
-            const nameToUse = availableNames[i % availableNames.length] || `Bot Extra ${Math.floor(Math.random() * 1000)}`;
+            const nameToUse = availableNames[i % availableNames.length] || `Jogador Extra ${Math.floor(Math.random() * 1000)}`;
             const botId = `bot_${Math.random().toString(36).substring(2, 9)}`;
             const botCard = generateBingoCard(botId, nameToUse);
             
-            await setDoc(doc(db, 'rooms', roomId, 'players', botId), {
-              name: nameToUse,
-              card: {
-                id: botCard.id,
-                playerName: botCard.playerName,
-                grid: serializeGrid(botCard.grid)
-              }
-            });
+            try {
+              await setDoc(doc(db, 'rooms', roomId, 'players', botId), {
+                name: nameToUse,
+                card: {
+                  id: botCard.id,
+                  playerName: botCard.playerName,
+                  grid: serializeGrid(botCard.grid)
+                }
+              });
+            } catch (dbErr) {
+              handleFirestoreError(dbErr, OperationType.CREATE, `rooms/${roomId}/players/${botId}`);
+            }
           }
         } else if (currentCount > maxBots) {
           // Remover bots excessivos se reduzido
           const diff = currentCount - maxBots;
           for (let i = 0; i < diff; i++) {
-            await deleteDoc(doc(db, 'rooms', roomId, 'players', botPlayersList[i].id));
+            try {
+              await deleteDoc(doc(db, 'rooms', roomId, 'players', botPlayersList[i].id));
+            } catch (dbErr) {
+              handleFirestoreError(dbErr, OperationType.DELETE, `rooms/${roomId}/players/${botPlayersList[i].id}`);
+            }
           }
         }
       }
@@ -371,23 +438,21 @@ export default function App() {
     }
   };
 
-  const handleSendMessage = (roomId: string, text: string) => {
-    setAppState(prev => ({
-      ...prev,
-      rooms: prev.rooms.map(r => {
-        if (r.id === roomId) {
-          const newMessage = {
-            id: Math.random().toString(36).substring(2, 9),
-            senderId: prev.currentUser!.uid,
-            senderName: prev.currentUser!.name,
-            text,
-            timestamp: Date.now()
-          };
-          return { ...r, messages: [...r.messages, newMessage] };
-        }
-        return r;
-      })
-    }));
+  const handleSendMessage = async (roomId: string, text: string) => {
+    if (!appState.currentUser) return;
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      const messageId = `msg_${Math.random().toString(36).substring(2, 9)}`;
+      await setDoc(doc(db, 'rooms', roomId, 'messages', messageId), {
+        senderId: appState.currentUser.uid,
+        senderName: appState.currentUser.name,
+        text,
+        timestamp: Date.now()
+      });
+    } catch (e) {
+      console.error("Error sending user chat message to Firestore:", e);
+    }
   };
 
   const [isAdminAutoDraw, setIsAdminAutoDraw] = useState(false);
@@ -403,6 +468,8 @@ export default function App() {
   const [autoRoomBotsCount, setAutoRoomBotsCount] = useState(2);
   const [autoRoomBaseName, setAutoRoomBaseName] = useState("Sala do Milhão");
   const [autoRoomSequenceNumber, setAutoRoomSequenceNumber] = useState(1);
+  const [autoRoomGameMode, setAutoRoomGameMode] = useState<GameMode>('full_card');
+  const [autoRoomQuantity, setAutoRoomQuantity] = useState(1);
   const [processedRooms, setProcessedRooms] = useState<Set<string>>(new Set());
   const [scheduledDeletions, setScheduledDeletions] = useState<Set<string>>(new Set());
 
@@ -413,7 +480,7 @@ export default function App() {
     const initAutomationSync = async () => {
       try {
         const { doc, onSnapshot } = await import('firebase/firestore');
-        const { db } = await import('./lib/firebase');
+        const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
         
         unsub = onSnapshot(doc(db, 'settings', 'global_automation'), (docSnap) => {
           if (docSnap.exists()) {
@@ -426,7 +493,11 @@ export default function App() {
             setAutoRoomBotsCount(data.botsCount ?? 2);
             setAutoRoomBaseName(data.roomBaseName ?? "Sala do Milhão");
             setAutoRoomSequenceNumber(data.roomSequenceNumber ?? 1);
+            setAutoRoomGameMode((data.gameMode as GameMode) ?? 'full_card');
+            setAutoRoomQuantity(data.quantity ?? 1);
           }
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, 'settings/global_automation');
         });
       } catch (err) {
         console.warn("Firestore settings: using local state fallback.");
@@ -491,6 +562,34 @@ export default function App() {
         roomSequenceNumber: val
       }, { merge: true });
       toast.success(`Sequencial atualizado para ${val}!`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomGameMode = async (val: GameMode) => {
+    setAutoRoomGameMode(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        gameMode: val
+      }, { merge: true });
+      toast.success(`Modo de jogo automático e bots atualizado!`);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleUpdateAutoRoomQuantity = async (val: number) => {
+    setAutoRoomQuantity(val);
+    try {
+      const { doc, setDoc } = await import('firebase/firestore');
+      const { db } = await import('./lib/firebase');
+      await setDoc(doc(db, 'settings', 'global_automation'), {
+        quantity: val
+      }, { merge: true });
+      toast.success(`Quantidade de salas por vez atualizada para ${val}!`);
     } catch (e) {
       console.error(e);
     }
@@ -564,64 +663,72 @@ export default function App() {
       let currentSeq = autoRoomSequenceNumber;
       let namePattern = autoRoomBaseName;
       let botsCount = autoRoomBotsCount;
+      let gMode: GameMode = autoRoomGameMode;
+      let quantityToCreate = autoRoomQuantity;
       if (sfDoc.exists()) {
         const d = sfDoc.data();
         currentSeq = d.roomSequenceNumber ?? currentSeq;
         namePattern = d.roomBaseName ?? namePattern;
         botsCount = d.botsCount ?? botsCount;
+        gMode = (d.gameMode as GameMode) ?? gMode;
+        quantityToCreate = d.quantity ?? quantityToCreate;
       }
       
-      const newRoomId = 'auto_' + Math.random().toString(36).substring(2, 9);
-      const scheduledTime = Date.now() + autoRoomInterval * 60 * 1000;
-      
-      const paddedSeq = currentSeq.toString().padStart(2, '0');
-      const roomPayload = {
-        name: `${namePattern} ${paddedSeq}`,
-        entryFee: 40,
-        prize: 400,
-        scheduledTime,
-        maxPlayers: 10,
-        status: 'waiting',
-        drawnNumbers: [],
-        gameMode: 'full_card',
-        botsEnabled: botsCount > 0,
-        maxBots: botsCount,
-        isAutoCreated: true,
-        ...(autoRoomRadioUrl ? { onlineRadioUrl: autoRoomRadioUrl } : {})
-      };
-      
-      await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+      for (let k = 0; k < quantityToCreate; k++) {
+        const nextSeq = currentSeq + k;
+        const newRoomId = 'auto_' + Math.random().toString(36).substring(2, 9);
+        const scheduledTime = Date.now() + autoRoomInterval * 60 * 1000 + (k * 1000); // 1s diff offset
+        
+        const paddedSeq = nextSeq.toString().padStart(2, '0');
+        const roomPayload = {
+          name: `${namePattern} ${paddedSeq}`,
+          entryFee: 40,
+          prize: 400,
+          scheduledTime,
+          maxPlayers: 10,
+          status: 'waiting',
+          drawnNumbers: [],
+          gameMode: gMode,
+          botsEnabled: botsCount > 0,
+          maxBots: botsCount,
+          isAutoCreated: true,
+          theme: 'emerald', // can specify default theme, or let them update it
+          ...(autoRoomRadioUrl ? { onlineRadioUrl: autoRoomRadioUrl } : {})
+        };
+        
+        await setDoc(doc(db, 'rooms', newRoomId), roomPayload);
+        
+        // Adicionar bots na coleção de players
+        if (botsCount > 0) {
+          const botNames = [
+            "Arthur", "Daiane", "Camila", "Sandra", "Renato",
+            "Bruno", "Carol", "Diego", "Eduardo", "Felipe",
+            "Gisele", "Hugo", "Igor", "Julia", "Lucas"
+          ];
+          const shuffled = [...botNames].sort(() => 0.5 - Math.random());
+          const botsToCreate = Math.min(botsCount, shuffled.length);
+          
+          for (let i = 0; i < botsToCreate; i++) {
+            const botId = `bot_auto_${Math.random().toString(36).substring(2, 9)}`;
+            const botCard = generateBingoCard(botId, shuffled[i]);
+            await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
+              name: shuffled[i],
+              card: {
+                id: botCard.id,
+                playerName: botCard.playerName,
+                grid: serializeGrid(botCard.grid)
+              }
+            });
+          }
+        }
+      }
 
       // Save next sequence number
       await setDoc(doc(db, 'settings', 'global_automation'), {
-        roomSequenceNumber: currentSeq + 1
+        roomSequenceNumber: currentSeq + quantityToCreate
       }, { merge: true });
       
-      // Adicionar bots na coleção de players
-      if (botsCount > 0) {
-        const botNames = [
-          "Bot Arthur", "Bot Daiane", "Bot Camila", "Bot Sandra", "Bot Renato",
-          "Bot Bruno", "Bot Carol", "Bot Diego", "Bot Eduardo", "Bot Felipe",
-          "Bot Gisele", "Bot Hugo", "Bot Igor", "Bot Julia", "Bot Lucas"
-        ];
-        const shuffled = [...botNames].sort(() => 0.5 - Math.random());
-        const botsToCreate = Math.min(botsCount, shuffled.length);
-        
-        for (let i = 0; i < botsToCreate; i++) {
-          const botId = `bot_auto_${Math.random().toString(36).substring(2, 9)}`;
-          const botCard = generateBingoCard(botId, shuffled[i]);
-          await setDoc(doc(db, 'rooms', newRoomId, 'players', botId), {
-            name: shuffled[i],
-            card: {
-              id: botCard.id,
-              playerName: botCard.playerName,
-              grid: serializeGrid(botCard.grid)
-            }
-          });
-        }
-      }
-      
-      console.log("Automatic Scheduled Room created.");
+      console.log(`Automatic Scheduled Rooms created: quantity=${quantityToCreate}`);
     } catch (e) {
       console.error("Auto room creator failure:", e);
     } finally {
@@ -698,57 +805,142 @@ export default function App() {
     });
   }, [appState.rooms, scheduledDeletions]);
 
-  // Background Interactive Bots Chat Commentary Simulation
+  // Background Interactive Bots AI Chat Commentary Simulation (Periodic Game commentary)
   useEffect(() => {
     const activeRoom = appState.rooms.find(r => r.id === appState.currentRoomId);
     if (!activeRoom || activeRoom.status !== 'active') return;
+    if (!appState.currentUser) return;
     
     const botPlayers = (activeRoom.players || []).filter(p => p.id.startsWith('bot_') || p.id.includes('bot'));
     if (botPlayers.length === 0) return;
-    
+
+    // Designate exactly one player client to run the background periodic commentaries to prevent duplicate triggers
+    const humanPlayers = (activeRoom.players || []).filter(p => !p.id.startsWith('bot_') && !p.id.includes('bot'));
+    const sortedHumans = [...humanPlayers].sort((a, b) => a.id.localeCompare(b.id));
+    const isTriggerHost = sortedHumans[0]?.id === appState.currentUser.uid;
+
+    if (!isTriggerHost) return;
+
     const chatTick = setInterval(async () => {
+      // 40% probability of AI-generated commentary every 25 seconds
       if (Math.random() > 0.4) return;
       
       const randomBot = botPlayers[Math.floor(Math.random() * botPlayers.length)];
-      const commentaries = [
-        "Falta só um pra mim! 😱",
-        "Pede B-12! Só vem!",
-        "Esse prêmio já é meu, kkkk",
-        "Nossa, to longe de ganhar ainda rs",
-        "Boa sorte galera! Bingo tá emocionante!",
-        "Agora vai! Marquei agora!",
-        "Mais alguém na boa?",
-        "BINGO tá vindo!!! 🔥",
-        "Quase marquei essa de agora!!! 😂",
-        "Vem número bom pfv!!!",
-        "Vambora bingo!!! 🔥"
-      ];
-      
-      if (activeRoom.drawnNumbers.length > 25) {
-        commentaries.push("Meu Deus, o coração tá batendo forte!");
-        commentaries.push("Ta quase de sair o ganhador!!!");
-      }
-      
-      const messageText = commentaries[Math.floor(Math.random() * commentaries.length)];
       
       try {
+        const response = await fetch('/api/gemini/bot-message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            roomName: activeRoom.name,
+            drawnNumbers: activeRoom.drawnNumbers || [],
+            players: activeRoom.players || [],
+            messages: (activeRoom.messages || []).map(m => ({
+              id: m.id,
+              senderId: m.senderId,
+              senderName: m.senderName,
+              text: m.text,
+              timestamp: m.timestamp
+            })),
+            triggerType: 'periodic',
+            targetBotName: randomBot.name,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const botMessageText = data.text;
+
         const { doc, setDoc } = await import('firebase/firestore');
         const { db } = await import('./lib/firebase');
-        
         const messageId = `botmsg_${Math.random().toString(36).substring(2, 9)}`;
         await setDoc(doc(db, 'rooms', activeRoom.id, 'messages', messageId), {
           senderId: randomBot.id,
           senderName: randomBot.name,
-          text: messageText,
+          text: botMessageText,
           timestamp: Date.now()
         });
       } catch (err) {
-        console.error("Bot chat message error:", err);
+        console.error("AI periodic chat message error:", err);
       }
-    }, 15000);
+    }, 25000);
     
     return () => clearInterval(chatTick);
-  }, [appState.currentRoomId, appState.rooms]);
+  }, [appState.currentRoomId, appState.rooms, appState.currentUser]);
+
+  // Active user's client trigger for direct, real-time AI replies from bots in the chat
+  useEffect(() => {
+    const activeRoom = appState.rooms.find(r => r.id === appState.currentRoomId);
+    if (!activeRoom || activeRoom.status !== 'active') return;
+    if (!appState.currentUser) return;
+
+    const messages = activeRoom.messages || [];
+    if (messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    const isBot = lastMessage.senderId.startsWith('bot_') || lastMessage.senderId.includes('bot') || lastMessage.id.startsWith('botmsg');
+    
+    // Auth-gate: trigger ONLY if the last message came from the active client's user (avoid duplicate triggers)
+    const isCurrentUserSender = lastMessage.senderId === appState.currentUser.uid;
+
+    if (!isBot && isCurrentUserSender) {
+      const botPlayers = (activeRoom.players || []).filter(p => p.id.startsWith('bot_') || p.id.includes('bot'));
+      if (botPlayers.length === 0) return;
+
+      const timer = setTimeout(async () => {
+        const randomBot = botPlayers[Math.floor(Math.random() * botPlayers.length)];
+        
+        try {
+          const response = await fetch('/api/gemini/bot-message', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              roomName: activeRoom.name,
+              drawnNumbers: activeRoom.drawnNumbers || [],
+              players: activeRoom.players || [],
+              messages: messages.map(m => ({
+                id: m.id,
+                senderId: m.senderId,
+                senderName: m.senderName,
+                text: m.text,
+                timestamp: m.timestamp
+              })),
+              triggerType: 'direct_reply',
+              targetBotName: randomBot.name,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const botMessageText = data.text;
+
+          const { doc, setDoc } = await import('firebase/firestore');
+          const { db } = await import('./lib/firebase');
+          const messageId = `botmsg_${Math.random().toString(36).substring(2, 9)}`;
+          await setDoc(doc(db, 'rooms', activeRoom.id, 'messages', messageId), {
+            senderId: randomBot.id,
+            senderName: randomBot.name,
+            text: botMessageText,
+            timestamp: Date.now()
+          });
+        } catch (e) {
+          console.error('[AI Direct Reply] Error:', e);
+        }
+      }, 2500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [appState.currentRoomId, appState.rooms, appState.currentUser]);
 
   // Sincronizar salas via onSnapshot em tempo real com subcoleção de jogadores para contagem exata de bots e players
   useEffect(() => {
@@ -759,7 +951,7 @@ export default function App() {
     const initRoomsRealtimeSync = async () => {
       try {
         const { collection, onSnapshot } = await import('firebase/firestore');
-        const { db } = await import('./lib/firebase');
+        const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
         
         unsubRooms = onSnapshot(collection(db, 'rooms'), (snap) => {
           const roomsList: Room[] = [];
@@ -827,6 +1019,8 @@ export default function App() {
                   ...prev,
                   rooms: prev.rooms.map(r => r.id === room.id ? { ...r, players: fetchedPlayers } : r)
                 }));
+              }, (error) => {
+                handleFirestoreError(error, OperationType.GET, `rooms/${room.id}/players`);
               });
             }
           });
@@ -844,6 +1038,8 @@ export default function App() {
               rooms: finalRooms
             };
           });
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, 'rooms');
         });
       } catch (err) {
         console.log("Real-time rooms listener error:", err);
@@ -867,7 +1063,7 @@ export default function App() {
     const initSubcollectionsSync = async () => {
       try {
         const { collection, onSnapshot, query, orderBy } = await import('firebase/firestore');
-        const { db } = await import('./lib/firebase');
+        const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
         
         const rId = appState.currentRoomId!;
         
@@ -902,6 +1098,8 @@ export default function App() {
             });
             return { ...prev, rooms: newRooms };
           });
+        }, (error) => {
+          handleFirestoreError(error, OperationType.GET, `rooms/${rId}/players`);
         });
 
         unsubMessages = onSnapshot(
@@ -928,6 +1126,9 @@ export default function App() {
               });
               return { ...prev, rooms: newRooms };
             });
+          },
+          (error) => {
+            handleFirestoreError(error, OperationType.GET, `rooms/${rId}/messages`);
           }
         );
       } catch (err) {
@@ -968,15 +1169,24 @@ export default function App() {
         const creditAward = async () => {
           try {
             const { doc, getDoc, updateDoc } = await import('firebase/firestore');
-            const { db } = await import('./lib/firebase');
+            const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
             
             const userRef = doc(db, 'users', appState.currentUser!.uid);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists()) {
+            let userSnap;
+            try {
+              userSnap = await getDoc(userRef);
+            } catch (dbErr) {
+              handleFirestoreError(dbErr, OperationType.GET, `users/${appState.currentUser!.uid}`);
+            }
+            if (userSnap && userSnap.exists()) {
               const currentCoins = userSnap.data().coins || 0;
-              await updateDoc(userRef, {
-                coins: currentCoins + sharePrize
-              });
+              try {
+                await updateDoc(userRef, {
+                  coins: currentCoins + sharePrize
+                });
+              } catch (dbErr) {
+                handleFirestoreError(dbErr, OperationType.UPDATE, `users/${appState.currentUser!.uid}`);
+              }
               
               setAppState(prev => ({
                 ...prev,
@@ -1020,8 +1230,12 @@ export default function App() {
         if (room.status === 'waiting' && Date.now() >= room.scheduledTime) {
           try {
             const { doc, updateDoc } = await import('firebase/firestore');
-            const { db } = await import('./lib/firebase');
-            await updateDoc(doc(db, 'rooms', room.id), { status: 'active' });
+            const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
+            try {
+              await updateDoc(doc(db, 'rooms', room.id), { status: 'active' });
+            } catch (dbErr) {
+              handleFirestoreError(dbErr, OperationType.UPDATE, `rooms/${room.id}`);
+            }
             console.log(`[Scheduled Start] Sala ${room.id} decolou no Firestore com sucesso.`);
           } catch (e) {
             console.error(e);
@@ -1040,8 +1254,12 @@ export default function App() {
       const autoStart = async () => {
         try {
           const { doc, updateDoc } = await import('firebase/firestore');
-          const { db } = await import('./lib/firebase');
-          await updateDoc(doc(db, 'rooms', room.id), { status: 'active' });
+          const { db, handleFirestoreError, OperationType } = await import('./lib/firebase');
+          try {
+            await updateDoc(doc(db, 'rooms', room.id), { status: 'active' });
+          } catch (dbErr) {
+            handleFirestoreError(dbErr, OperationType.UPDATE, `rooms/${room.id}`);
+          }
           console.log(`[Bot vs Bot Start] Sala demo ${room.id} decolou imediatamente.`);
         } catch (e) {
           console.error("Erro ao ativar sala bot_vs_bot:", e);
@@ -1296,6 +1514,8 @@ export default function App() {
                   autoRoomBotsCount={autoRoomBotsCount}
                   autoRoomBaseName={autoRoomBaseName}
                   autoRoomSequenceNumber={autoRoomSequenceNumber}
+                  autoRoomGameMode={autoRoomGameMode}
+                  autoRoomQuantity={autoRoomQuantity}
                   onToggleAutoRoomEnabled={handleToggleAutoRoomEnabled}
                   onUpdateAutoRoomInterval={handleUpdateAutoRoomInterval}
                   onUpdateAutoRoomHours={handleUpdateAutoRoomHours}
@@ -1303,6 +1523,8 @@ export default function App() {
                   onUpdateAutoRoomBotsCount={handleUpdateAutoRoomBotsCount}
                   onUpdateAutoRoomBaseName={handleUpdateAutoRoomBaseName}
                   onUpdateAutoRoomSequenceNumber={handleUpdateAutoRoomSequenceNumber}
+                  onUpdateAutoRoomGameMode={handleUpdateAutoRoomGameMode}
+                  onUpdateAutoRoomQuantity={handleUpdateAutoRoomQuantity}
                 />
               )
            ) : (
@@ -1409,6 +1631,7 @@ export default function App() {
              return { uid: p.id, name: p.name, avatar: fullUser?.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + p.name };
            })}
            playersList={playersList}
+            theme={room.theme || 'emerald'}
            onExit={() => setAppState(prev => ({ ...prev, view: 'player_lobby', currentRoomId: null }))}
            onSendMessage={(text) => handleSendMessage(room.id, text)}
            onOpenProfile={() => setAppState(prev => ({ ...prev, view: 'profile' }))}

@@ -47,6 +47,7 @@ export interface Room {
   botsEnabled?: boolean;
   maxBots?: number;
   isAutoCreated?: boolean;
+  theme?: string;
 }
 
 export interface User {

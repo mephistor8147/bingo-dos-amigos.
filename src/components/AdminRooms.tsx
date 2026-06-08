@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Room } from '../types';
+import { Room, GameMode } from '../types';
 import { Plus, Users, Clock, Coins, Play, Trophy, Radio, ShieldAlert, Edit3, Image as ImageIcon } from 'lucide-react';
 
 interface AdminRoomsProps {
@@ -7,7 +7,7 @@ interface AdminRoomsProps {
   onCreateRoom: (room: Partial<Room & { botsEnabled?: boolean; maxBots?: number }>) => void;
   onEnterRoom: (roomId: string) => void;
   onDeleteRoom: (roomId: string) => void;
-  onUpdateRoomSettings?: (roomId: string, name: string, botsEnabled: boolean, maxBots: number, backgroundImageUrl?: string, roomIcon?: string) => void;
+  onUpdateRoomSettings?: (roomId: string, name: string, botsEnabled: boolean, maxBots: number, backgroundImageUrl?: string, roomIcon?: string, theme?: string) => void;
   autoRoomEnabled: boolean;
   autoRoomInterval: number;
   autoRoomStartHour: string;
@@ -20,9 +20,13 @@ interface AdminRoomsProps {
   autoRoomBotsCount?: number;
   autoRoomBaseName?: string;
   autoRoomSequenceNumber?: number;
+  autoRoomGameMode?: GameMode;
+  autoRoomQuantity?: number;
   onUpdateAutoRoomBotsCount?: (val: number) => void;
   onUpdateAutoRoomBaseName?: (val: string) => void;
   onUpdateAutoRoomSequenceNumber?: (val: number) => void;
+  onUpdateAutoRoomGameMode?: (val: GameMode) => void;
+  onUpdateAutoRoomQuantity?: (val: number) => void;
 }
 
 const PRESET_ICONS = ['🎉', '🏆', '💎', '🍀', '🔥', '🤖', '⭐', '🚀', '👑', '🃏', '🍒', '🎨', '🎵', '🎪', '🎰'];
@@ -47,16 +51,20 @@ export function AdminRooms({
   autoRoomStartHour,
   autoRoomEndHour,
   autoRoomRadioUrl,
+  autoRoomBotsCount,
+  autoRoomBaseName,
+  autoRoomSequenceNumber,
+  autoRoomGameMode,
+  autoRoomQuantity,
   onToggleAutoRoomEnabled,
   onUpdateAutoRoomInterval,
   onUpdateAutoRoomHours,
   onUpdateAutoRoomRadioUrl,
-  autoRoomBotsCount,
-  autoRoomBaseName,
-  autoRoomSequenceNumber,
   onUpdateAutoRoomBotsCount,
   onUpdateAutoRoomBaseName,
-  onUpdateAutoRoomSequenceNumber
+  onUpdateAutoRoomSequenceNumber,
+  onUpdateAutoRoomGameMode,
+  onUpdateAutoRoomQuantity
  }: AdminRoomsProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
@@ -65,8 +73,10 @@ export function AdminRooms({
   const [editMaxBots, setEditMaxBots] = useState(2);
   const [editBgImage, setEditBgImage] = useState('');
   const [editIcon, setEditIcon] = useState('🎉');
+  const [editTheme, setEditTheme] = useState('emerald');
   
   const [newName, setNewName] = useState('');
+  const [theme, setTheme] = useState('emerald');
   const [fee, setFee] = useState(10);
   const [prize, setPrize] = useState(100);
   const [bgMusicUrl, setBgMusicUrl] = useState('');
@@ -99,8 +109,10 @@ export function AdminRooms({
       gameMode,
       botsEnabled,
       maxBots,
+      theme,
     });
     setNewName('');
+    setTheme('emerald');
     setBgMusicUrl('');
     setOnlineRadioUrl('');
     setRoomBgImage('');
@@ -251,6 +263,39 @@ export function AdminRooms({
           </div>
         </div>
 
+        {/* ⚙️ Novidades: Modo de Jogo e Quantidade de Salas Criadas por Vez */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/80">
+          {/* Modo de Jogo Programado */}
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Modo de Jogo Automático</span>
+            <select 
+              value={autoRoomGameMode ?? "full_card"} 
+              onChange={e => onUpdateAutoRoomGameMode && onUpdateAutoRoomGameMode(e.target.value as GameMode)}
+              disabled={!autoRoomEnabled}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 dark:text-slate-300 outline-none disabled:opacity-40"
+            >
+              <option value="full_card">Cartela Cheia</option>
+              <option value="line">Linha (Vertical/Horizontal)</option>
+              <option value="block_of_4">4 Números Próximos (Bloco 2x2)</option>
+              <option value="bot_vs_bot">Bot vs Bot (Apenas Bots)</option>
+            </select>
+          </div>
+
+          {/* Quantidade de Salas Criadas por Vez */}
+          <div className="bg-white dark:bg-slate-950 p-4 rounded-2xl border border-slate-200/50 dark:border-slate-800 flex flex-col justify-between gap-1.5 shadow-sm">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quantidade de Salas Criadas por Vez</span>
+            <input 
+              type="number" 
+              min="1"
+              max="5"
+              value={autoRoomQuantity ?? 1}
+              onChange={e => onUpdateAutoRoomQuantity && onUpdateAutoRoomQuantity(Number(e.target.value))}
+              disabled={!autoRoomEnabled}
+              className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-2.5 py-2 text-xs font-black text-slate-700 dark:text-slate-305 outline-none disabled:opacity-40"
+            />
+          </div>
+        </div>
+
         {/* Rádio Online para Salas Automáticas */}
         <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/80 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-left">
@@ -297,19 +342,33 @@ export function AdminRooms({
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div>
                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Nome da Sala</label>
-                 <input type="text" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Ex: Rodada Prêmium" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 dark:text-slate-100" />
+                 <input type="text" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Ex: Rodada Prêmium" className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-slate-800 dark:text-slate-100" />
                </div>
                <div>
                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Hora de Início</label>
-                 <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-indigo-600 dark:text-indigo-400" />
+                 <input type="datetime-local" value={startTime} onChange={e=>setStartTime(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-indigo-600 dark:text-indigo-400" />
+               </div>
+               <div>
+                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Tema Visual da Sala</label>
+                 <select 
+                   value={theme} 
+                   onChange={e=>setTheme(e.target.value)} 
+                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-slate-800 dark:text-slate-100"
+                 >
+                   <option value="emerald">Verde Esmeralda (Padrão)</option>
+                   <option value="ocean">Azul Real Oceano</option>
+                   <option value="sunset">Brilho do Pôr do Sol</option>
+                   <option value="royal">Noite Estelar Roxa</option>
+                   <option value="cherry">Beleza Flor de Cerejeira</option>
+                 </select>
                </div>
                <div>
                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Taxa de Entrada (Moedas)</label>
-                 <input type="number" min="0" value={fee} onChange={e=>setFee(Number(e.target.value))} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-amber-600 dark:text-amber-400" />
+                 <input type="number" min="0" value={fee} onChange={e=>setFee(Number(e.target.value))} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-amber-600 dark:text-amber-400" />
                </div>
                <div>
                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Premiação (Moedas)</label>
-                 <input type="number" min="0" value={prize} onChange={e=>setPrize(Number(e.target.value))} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-emerald-605 dark:text-emerald-400" />
+                 <input type="number" min="0" value={prize} onChange={e=>setPrize(Number(e.target.value))} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-emerald-605 dark:text-emerald-400" />
                </div>
                <div className="sm:col-span-2">
                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1">Música de Fundo (MP3, MIDI)</label>
@@ -559,6 +618,7 @@ export function AdminRooms({
                       setEditName(room.name);
                       setEditBotsEnabled(room.botsEnabled || false);
                       setEditMaxBots(room.maxBots || 0);
+                      setEditTheme(room.theme || 'emerald');
                     }}
                     className="bg-amber-100 hover:bg-amber-200 text-amber-700 dark:bg-amber-955/40 dark:text-amber-400 dark:hover:bg-amber-900/40 px-3 py-2 rounded-xl font-bold flex items-center gap-1 transition-colors text-xs cursor-pointer"
                   >
@@ -608,6 +668,21 @@ export function AdminRooms({
                   onChange={e => setEditName(e.target.value)} 
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-slate-800 dark:text-white text-xs md:text-sm" 
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Tema Visual da Sala</label>
+                <select 
+                  value={editTheme} 
+                  onChange={e => setEditTheme(e.target.value)} 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-indigo-505 outline-none font-bold text-slate-800 dark:text-white text-xs"
+                >
+                  <option value="emerald">Verde Esmeralda (Padrão)</option>
+                  <option value="ocean">Azul Real Oceano</option>
+                  <option value="sunset">Brilho do Pôr do Sol</option>
+                  <option value="royal">Noite Estelar Roxa</option>
+                  <option value="cherry">Beleza Flor de Cerejeira</option>
+                </select>
               </div>
 
               <div>
@@ -749,7 +824,8 @@ export function AdminRooms({
                       editBotsEnabled, 
                       editBotsEnabled ? editMaxBots : 0,
                       editBgImage,
-                      editIcon
+                      editIcon,
+                      editTheme
                     );
                   }
                   setEditingRoom(null);
