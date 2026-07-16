@@ -120,7 +120,11 @@ ${chatHistoryText || "(O chat está vazio)"}
 
       res.json({ text: parsed.text || "Vambora bingo! 🔥" });
     } catch (error: any) {
-      console.warn("Gemini Bot message generation failed, recovering with realistic offline fallback:", error);
+      if (error?.status === 403 || error?.message?.includes("leaked")) {
+        console.warn("⚠️ A chave da API do Gemini informada é inválida ou foi reportada como vazada. Usando fallback offline. Atualize sua chave no menu Settings.");
+      } else {
+        console.warn("⚠️ Falha ao gerar mensagem com Gemini (usando fallback offline):", error?.message || error);
+      }
       
       const fallbackReplies = [
         "Vambora bingo! 🔥",

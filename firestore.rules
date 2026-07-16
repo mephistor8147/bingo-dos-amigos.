@@ -33,25 +33,25 @@ service cloud.firestore {
 
     // Rooms Collection
     match /rooms/{roomId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isSignedIn() && isValidId(roomId);
 
       // Players subcollection
       match /players/{playerId} {
-        allow read: if isSignedIn();
+        allow read: if true;
         allow write: if isSignedIn() && isValidId(playerId);
       }
 
       // Messages subcollection
       match /messages/{messageId} {
-        allow read: if isSignedIn();
+        allow read: if true;
         allow write: if isSignedIn() && isValidId(messageId);
       }
     }
 
     // Settings Collection
     match /settings/{settingId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isSignedIn() && isValidId(settingId);
     }
 

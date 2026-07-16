@@ -61,7 +61,7 @@ export function PlayerLobby({
   onOpenProfile,
   autoRoomEnabled,
 }: PlayerLobbyProps) {
-  const user = appState.currentUser!;
+  const user = appState.currentUser;
   const [countdown, setCountdown] = React.useState<string>("");
 
   React.useEffect(() => {
@@ -97,36 +97,38 @@ export function PlayerLobby({
   return (
     <div className="max-w-4xl mx-auto p-3 md:p-5 pb-20">
       {/* Lobby Unified Header Card */}
-      <div className="flex items-center justify-between mb-5 bg-white dark:bg-slate-900 p-3.5 rounded-3xl shadow-md border border-slate-100 dark:border-slate-800 transition-colors">
-        <button
-          onClick={onOpenProfile}
-          className="flex items-center gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-2xl transition-colors text-left"
-        >
-          <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-450 rounded-full flex items-center justify-center overflow-hidden shrink-0">
-            {user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt="Avatar"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <UserCircle2 className="w-8 h-8" />
-            )}
+      {user && (
+        <div className="flex items-center justify-between mb-5 bg-white dark:bg-slate-900 p-3.5 rounded-3xl shadow-md border border-slate-100 dark:border-slate-800 transition-colors">
+          <button
+            onClick={onOpenProfile}
+            className="flex items-center gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-2xl transition-colors text-left"
+          >
+            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-450 rounded-full flex items-center justify-center overflow-hidden shrink-0">
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <UserCircle2 className="w-8 h-8" />
+              )}
+            </div>
+            <div>
+              <h2 className="text-base md:text-lg font-black text-slate-800 dark:text-white leading-tight">
+                {user.name}
+              </h2>
+              <p className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] md:text-xs hover:underline">
+                Ver Perfil
+              </p>
+            </div>
+          </button>
+          <div className="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-3.5 py-1.5 rounded-2xl flex items-center gap-1.5 font-black text-sm md:text-base transition-colors border border-amber-200/20 dark:border-amber-900/30 shrink-0">
+            <Coins className="w-4.5 h-4.5 md:w-5 h-5 shrink-0" />
+            {user.coins.toLocaleString()}
           </div>
-          <div>
-            <h2 className="text-base md:text-lg font-black text-slate-800 dark:text-white leading-tight">
-              {user.name}
-            </h2>
-            <p className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] md:text-xs hover:underline">
-              Ver Perfil
-            </p>
-          </div>
-        </button>
-        <div className="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-3.5 py-1.5 rounded-2xl flex items-center gap-1.5 font-black text-sm md:text-base transition-colors border border-amber-200/20 dark:border-amber-900/30 shrink-0">
-          <Coins className="w-4.5 h-4.5 md:w-5 h-5 shrink-0" />
-          {user.coins.toLocaleString()}
         </div>
-      </div>
+      )}
 
       {autoRoomEnabled && countdown && (
         <div className="mb-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-3xl p-4 md:p-5 flex items-center justify-between shadow-lg shadow-indigo-500/20 relative overflow-hidden transition-all">
@@ -162,11 +164,11 @@ export function PlayerLobby({
         ) : (
           appState.rooms.map((room) => {
             const playersList = room.players || [];
-            const isJoined = playersList.some((p) => p.id === user.uid);
+            const isJoined = user ? playersList.some((p) => p.id === user.uid) : false;
             const isFull = playersList.length >= room.maxPlayers;
-            const canJoin = !isJoined && !isFull && user.coins >= room.entryFee;
+            const canJoin = user ? (!isJoined && !isFull && user.coins >= room.entryFee) : (!isJoined && !isFull);
 
-            const userParticipant = playersList.find((p) => p.id === user.uid);
+            const userParticipant = user ? playersList.find((p) => p.id === user.uid) : undefined;
             const hasWon = userParticipant
               ? isCardWinner(
                   userParticipant.card,
@@ -262,7 +264,14 @@ export function PlayerLobby({
                     {(room.players || []).length} / {room.maxPlayers} Ativos
                   </div>
 
-                  {user.role === "admin" ? (
+                  {!user ? (
+                    <button
+                      onClick={() => onEnterRoom(room.id)}
+                      className="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md active:scale-95 text-xs md:text-sm"
+                    >
+                      Assistir
+                    </button>
+                  ) : user.role === "admin" ? (
                     <button
                       onClick={() => onEnterRoom(room.id)}
                       className="bg-indigo-650 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-black transition-all shadow-lg shadow-indigo-650/20 active:scale-95 text-xs md:text-sm"

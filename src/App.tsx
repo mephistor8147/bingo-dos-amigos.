@@ -38,7 +38,7 @@ export default function App() {
         console.error(e);
       }
       return {
-        view: "home",
+        view: "player_lobby",
         rooms: [],
         currentRoomId: null,
         currentUser: null,
@@ -106,11 +106,11 @@ export default function App() {
             if (userSnap && userSnap.exists()) {
               const userData = userSnap.data();
               setAppState((prev) => {
-                const isHome = prev.view === "home";
+                const isLobby = prev.view === "player_lobby" || prev.view === "home";
                 return {
                   ...prev,
                   currentUser: { uid: firebaseUser.uid, ...userData } as any,
-                  view: isHome
+                  view: isLobby
                     ? userData.role === "admin"
                       ? "admin"
                       : "player_lobby"
@@ -143,7 +143,7 @@ export default function App() {
     }
     setAppState((prev) => ({
       ...prev,
-      view: "home",
+      view: "player_lobby",
       currentUser: null,
       currentRoomId: null,
     }));
@@ -623,7 +623,6 @@ export default function App() {
 
   // Sincronizar Configuração Global via Firestore
   useEffect(() => {
-    if (!appState.currentUser) return;
     let unsub: () => void = () => {};
     const initAutomationSync = async () => {
       try {
@@ -1277,7 +1276,6 @@ export default function App() {
 
   // Sincronizar salas via onSnapshot em tempo real com subcoleção de jogadores para contagem exata de bots e players
   useEffect(() => {
-    if (!appState.currentUser) return;
     let unsubRooms: () => void = () => {};
     const playerUnsubs: { [roomId: string]: () => void } = {};
 
@@ -2116,32 +2114,6 @@ export default function App() {
     );
   }
 
-  if (appState.view === "home") {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 sm:p-6 transition-colors">
-        <Toaster position="top-center" />
-        <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-xl p-6 sm:p-8 text-center space-y-6 transition-colors">
-          <h1 className="text-4xl font-black text-slate-800 dark:text-white tracking-tight">
-            Bingo<span className="text-emerald-500">Live</span>
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium">
-            Faça login para continuar
-          </p>
-          <div className="grid grid-cols-1 gap-4 pt-4">
-            <button
-              onClick={() =>
-                setAppState((prev) => ({ ...prev, showAuth: true }))
-              }
-              className="bg-emerald-500 hover:bg-emerald-600 text-white p-5 rounded-2xl font-bold text-lg transition-transform active:scale-95 shadow-lg shadow-emerald-500/20"
-            >
-              Acessar Plataforma
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (appState.view === "admin") {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors flex flex-col">
@@ -2382,12 +2354,21 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors pt-6 sm:pt-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 mb-6 sm:mb-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleLogout}
-              className="text-slate-500 dark:text-slate-400 font-bold bg-white dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors"
-            >
-              Sair
-            </button>
+            {appState.currentUser ? (
+              <button
+                onClick={handleLogout}
+                className="text-slate-500 dark:text-slate-400 font-bold bg-white dark:bg-slate-900 px-4 py-2 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 transition-colors"
+              >
+                Sair
+              </button>
+            ) : (
+              <button
+                onClick={() => setAppState(prev => ({ ...prev, showAuth: true }))}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold px-4 py-2 rounded-xl shadow-sm transition-colors"
+              >
+                Entrar
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={() =>
@@ -2584,7 +2565,7 @@ export default function App() {
           onLogout={() =>
             setAppState((prev) => ({
               ...prev,
-              view: "home",
+              view: "player_lobby",
               currentUser: null,
               currentRoomId: null,
             }))

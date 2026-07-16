@@ -1279,8 +1279,9 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
           {/* LEFT COLUMN: Draw panel, simulator panel, spectator warnings, bingo card */}
           <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4 w-full">
             {/* Drawn Balls Animation Stage */}
-        <div className="flex flex-col items-center mb-4 bg-slate-100/50 dark:bg-slate-900/60 p-3 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-inner max-w-md mx-auto w-full">
-          <span className="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2 select-none">Painel de Sorteio</span>
+        {!isSpectator && (
+          <div className="flex flex-col items-center mb-4 bg-slate-100/50 dark:bg-slate-900/60 p-3 rounded-3xl border border-slate-200/50 dark:border-slate-800/80 shadow-inner max-w-md mx-auto w-full">
+            <span className="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2 select-none">Painel de Sorteio</span>
           <div className="flex items-center gap-4 h-28 justify-center w-full relative">
             <AnimatePresence mode="popLayout">
               {recentDrawn.map((num, i) => {
@@ -1359,6 +1360,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
             )}
           </div>
         </div>
+        )}
 
         {/* Spectator Warning Banner */}
         {isSpectator && (
@@ -1590,7 +1592,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
         )}
 
         {/* Bot / Participant Selector for Demonstration */}
-        {isSpectator && (playersList || []).length > 0 && (
+        {false && isSpectator && (playersList || []).length > 0 && (
           <div className="bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-3xl mb-4 max-w-[500px] w-full mx-auto shadow-sm">
             <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
@@ -1625,6 +1627,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
         )}
 
         {/* Bingo Card Container */}
+        {!isSpectator && (
         <div className="bg-emerald-300 rounded-3xl p-2.5 shadow-2xl shadow-emerald-900/40 border-[3px] border-emerald-400 relative max-w-[460px] w-full mx-auto">
           
           <div className="grid grid-cols-5 gap-1.5 mb-2">
@@ -1665,6 +1668,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
             )}
           </div>
         </div>
+        )}
 
           </div>
 
@@ -1837,6 +1841,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
         </div>
         
         {/* Bingo Animation Overlay */}
+        {/* Individual User Bingo Animation */}
         <AnimatePresence>
           {showBingoAnimation && (
              <motion.div
@@ -1845,7 +1850,39 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                exit={{ opacity: 0, scale: 1.5 }}
                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
              >
-                <div className="text-center rounded-3xl bg-white p-8 border-4 border-emerald-400 shadow-[0_0_50px_rgba(52,211,153,0.5)] flex flex-col items-center">
+                {/* Framer Motion Confetti/Stars for personal win */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                  {Array.from({ length: 40 }).map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ 
+                        opacity: 1, 
+                        scale: 0, 
+                        x: 0, 
+                        y: 0 
+                      }}
+                      animate={{ 
+                        opacity: [1, 1, 0],
+                        scale: [0, Math.random() * 2 + 1, 1],
+                        x: (Math.random() - 0.5) * window.innerWidth,
+                        y: (Math.random() - 0.5) * window.innerHeight,
+                        rotate: Math.random() * 360
+                      }}
+                      transition={{ 
+                        duration: 2 + Math.random() * 2, 
+                        ease: "easeOut",
+                        delay: Math.random() * 0.3
+                      }}
+                      className="absolute left-1/2 top-1/2 w-3 h-3 md:w-5 md:h-5 rounded-sm shadow-md"
+                      style={{
+                        clipPath: i % 2 === 0 ? "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)" : "none",
+                        backgroundColor: i % 3 === 0 ? '#F59E0B' : (i % 3 === 1 ? '#10B981' : '#3B82F6')
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <div className="text-center rounded-3xl bg-white p-8 border-4 border-emerald-400 shadow-[0_0_50px_rgba(52,211,153,0.5)] flex flex-col items-center z-10 relative">
                   <motion.div 
                     animate={{ rotate: [0, -10, 10, -10, 10, 0], scale: [1, 1.2, 1] }} 
                     transition={{ duration: 0.5, repeat: Infinity }}
@@ -1887,21 +1924,68 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                 transition={{ type: "spring", damping: 18 }}
                 className="bg-white dark:bg-slate-900 border-4 border-amber-500 rounded-[36px] shadow-[0_0_60px_rgba(245,158,11,0.55)] max-w-sm sm:max-w-md w-full p-6 sm:p-8 flex flex-col items-center relative my-auto scrollbar-none"
               >
-                {/* Crown / Trophy Floating element */}
-                <div className="absolute -top-12 bg-amber-500 text-white p-4.5 rounded-full border-4 border-white dark:border-slate-900 shadow-xl animate-bounce">
-                  <Trophy className="w-8 h-8 text-white shrink-0 animate-pulse" />
+                {/* Framer Motion Confetti/Stars */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[32px]">
+                  {Array.from({ length: 25 }).map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ 
+                        opacity: 1, 
+                        scale: 0, 
+                        x: 0, 
+                        y: 0 
+                      }}
+                      animate={{ 
+                        opacity: [1, 1, 0],
+                        scale: [0, Math.random() * 1.5 + 0.5, 1],
+                        x: (Math.random() - 0.5) * 500,
+                        y: (Math.random() - 0.5) * 500 - 100,
+                        rotate: Math.random() * 360
+                      }}
+                      transition={{ 
+                        duration: 2 + Math.random() * 2, 
+                        ease: "easeOut",
+                        delay: Math.random() * 0.4
+                      }}
+                      className="absolute left-1/2 top-1/2 w-2 h-2 md:w-3 md:h-3 rounded-sm shadow-md"
+                      style={{
+                        clipPath: i % 2 === 0 ? "polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)" : "none",
+                        backgroundColor: i % 3 === 0 ? '#F59E0B' : (i % 3 === 1 ? '#10B981' : '#3B82F6')
+                      }}
+                    />
+                  ))}
                 </div>
 
-                <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-400 uppercase tracking-widest mt-6 filter drop-shadow">
+                {/* Crown / Trophy Floating element */}
+                <motion.div 
+                  initial={{ scale: 0, rotate: -180, y: 50 }}
+                  animate={{ scale: [1.5, 1], rotate: 0, y: 0 }}
+                  transition={{ type: "spring", damping: 12, stiffness: 100, delay: 0.1 }}
+                  className="absolute -top-12 bg-amber-500 text-white p-4.5 rounded-full border-4 border-white dark:border-slate-900 shadow-xl"
+                >
+                  <motion.div
+                    animate={{ rotate: [0, -10, 10, -10, 10, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity, repeatDelay: 0.5 }}
+                  >
+                    <Trophy className="w-8 h-8 text-white shrink-0" />
+                  </motion.div>
+                </motion.div>
+
+                <motion.h2 
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: [1.2, 1], opacity: 1 }}
+                  transition={{ delay: 0.2, type: "spring", damping: 10 }}
+                  className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-yellow-400 uppercase tracking-widest mt-6 filter drop-shadow z-10 relative"
+                >
                   BINGO!
-                </h2>
+                </motion.h2>
                 
-                <p className="text-xs sm:text-sm font-extrabold text-slate-500 dark:text-slate-400 mt-2 uppercase tracking-wide">
+                <p className="text-xs sm:text-sm font-extrabold text-slate-500 dark:text-slate-400 mt-2 uppercase tracking-wide z-10 relative">
                   Temos Ganhadores na Rodada!
                 </p>
 
                 <div className="mt-6 flex flex-col gap-3 w-full max-h-[40vh] overflow-y-auto scrollbar-none">
-                  {(playersList || []).filter(p => isCardWinner(p.card, drawnNumbers, gameMode)).map((winner) => {
+                  {(playersList || []).filter(p => isCardWinner(p.card, drawnNumbers, gameMode)).map((winner, index) => {
                     const matchedParticipant = participants.find(part => part.uid === winner.id);
                     const isMe = winner.id === user.uid;
                     const avatarUrl = matchedParticipant?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + winner.name;
@@ -1909,8 +1993,10 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                     return (
                       <motion.div 
                         key={winner.id}
-                        initial={{ opacity: 0, x: -15 }}
-                        animate={{ opacity: 1, x: 0 }}
+                        initial={{ opacity: 0, x: -50, scale: 0.8 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        transition={{ delay: 0.3 + index * 0.15, type: "spring", damping: 15 }}
+                        whileHover={{ scale: 1.02 }}
                         className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800"
                       >
                         <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-400 bg-amber-50 shrink-0 shadow-md">
