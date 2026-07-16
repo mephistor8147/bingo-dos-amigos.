@@ -178,33 +178,37 @@ export class AudioController {
   private bgGain: GainNode | null = null;
 
   public speak(text: string, voiceGender: 'male' | 'female' = 'female') {
-    if (!('speechSynthesis' in window)) return;
-    
-    // Stop any ongoing speech to avoid overlapping
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'pt-BR';
-    
-    const voices = window.speechSynthesis.getVoices();
-    // Try to pick a voice matching gender
-    let selectedVoice = voices.find(v => v.lang.includes('pt-BR'));
-    
-    if (voices.length > 0) {
-      if (voiceGender === 'female') {
-        const femaleVoice = voices.find(v => v.lang.includes('pt') && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('maria')));
-        if (femaleVoice) selectedVoice = femaleVoice;
-      } else {
-        const maleVoice = voices.find(v => v.lang.includes('pt') && (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('daniel')));
-        if (maleVoice) selectedVoice = maleVoice;
+    try {
+      if (!('speechSynthesis' in window)) return;
+      
+      // Stop any ongoing speech to avoid overlapping
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pt-BR';
+      
+      const voices = window.speechSynthesis.getVoices() || [];
+      // Try to pick a voice matching gender
+      let selectedVoice = voices.find(v => v.lang && v.lang.includes('pt-BR'));
+      
+      if (voices.length > 0) {
+        if (voiceGender === 'female') {
+          const femaleVoice = voices.find(v => v.lang && v.lang.includes('pt') && v.name && (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('maria')));
+          if (femaleVoice) selectedVoice = femaleVoice;
+        } else {
+          const maleVoice = voices.find(v => v.lang && v.lang.includes('pt') && v.name && (v.name.toLowerCase().includes('male') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('daniel')));
+          if (maleVoice) selectedVoice = maleVoice;
+        }
       }
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn("Speech synthesis is modernly blocked or not supported in this frame:", e);
     }
-    
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
-    }
-    
-    window.speechSynthesis.speak(utterance);
   }
 
   public playBackgroundMusic(volume = 0.5) {

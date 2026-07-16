@@ -59,7 +59,7 @@ export function isCardWinner(card: BingoCardData, drawnNumbers: number[], gameMo
       }
       if (colWin) return true;
     }
-  } else if (effectiveMode === 'block_of_4') {
+  } else if (effectiveMode === 'block_of_4' || effectiveMode === 'four_balls_double') {
     // Verifica 16 possíveis blocos de 2x2 dentro da cartela 5x5
     for (let r = 0; r <= 3; r++) {
       for (let c = 0; c <= 3; c++) {
@@ -75,6 +75,16 @@ export function isCardWinner(card: BingoCardData, drawnNumbers: number[], gameMo
     }
   }
   return false;
+}
+
+export function getRoomCurrentPrize(room: { entryFee: number; prize?: number; prizeMode?: string; players?: any[] }): number {
+  if (room.prizeMode === 'cumulative') {
+    return room.entryFee * (room.players?.length || 0);
+  }
+  if (room.prizeMode === 'cumulative_jackpot') {
+    return Math.floor(room.entryFee * (room.players?.length || 0) * 0.8);
+  }
+  return room.prize || 0;
 }
 
 export function serializeGrid(grid: BingoSpace[][]): any[] {
@@ -98,5 +108,88 @@ export function deserializeGrid(serialized: any[]): BingoSpace[][] {
     grid.push(row);
   }
   return grid;
+}
+
+export function getNumbersNeededToWin(
+  card: BingoCardData,
+  drawnNumbers: number[],
+  gameMode: GameMode = 'full_card'
+): { count: number; numbers: number[] } {
+  if (!card || !card.grid || !Array.isArray(card.grid)) {
+    return { count: 99, numbers: [] };
+  }
+
+  const effectiveMode = gameMode === 'bot_vs_bot' ? 'full_card' : gameMode;
+
+  if (effectiveMode === 'full_card') {
+    const missing: number[] = [];
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 5; c++) {
+        const cell = card.grid[r][c];
+        if (cell !== 'FREE' && !drawnNumbers.includes(cell)) {
+          missing.push(cell);
+        }
+      }
+    }
+    return { count: missing.length, numbers: missing };
+  } else if (effectiveMode === 'line') {
+    let bestOption: number[] = Array.from({ length: 25 }, (_, i) => i);
+    
+    // Rows
+    for (let r = 0; r < 5; r++) {
+      const rowMissing: number[] = [];
+      for (let c = 0; c < 5; c++) {
+        const cell = card.grid[r][c];
+        if (cell !== 'FREE' && !drawnNumbers.includes(cell)) {
+          rowMissing.push(cell);
+        }
+      }
+      if (rowMissing.length < bestOption.length) {
+        bestOption = rowMissing;
+      }
+    }
+
+    // Columns
+    for (let c = 0; c < 5; c++) {
+      const colMissing: number[] = [];
+      for (let r = 0; r < 5; r++) {
+        const cell = card.grid[r][c];
+        if (cell !== 'FREE' && !drawnNumbers.includes(cell)) {
+          colMissing.push(cell);
+        }
+      }
+      if (colMissing.length < bestOption.length) {
+        bestOption = colMissing;
+      }
+    }
+
+    return { count: bestOption.length, numbers: bestOption };
+  } else if (effectiveMode === 'block_of_4' || effectiveMode === 'four_balls_double') {
+    let bestOption: number[] = Array.from({ length: 4 }, (_, i) => i);
+
+    for (let r = 0; r <= 3; r++) {
+      for (let c = 0; c <= 3; c++) {
+        const blockMissing: number[] = [];
+        const spaces = [
+          [r, c],
+          [r, c + 1],
+          [r + 1, c],
+          [r + 1, c + 1]
+        ];
+        for (const [sr, sc] of spaces) {
+          const cell = card.grid[sr][sc];
+          if (cell !== 'FREE' && !drawnNumbers.includes(cell)) {
+            blockMissing.push(cell);
+          }
+        }
+        if (blockMissing.length < bestOption.length) {
+          bestOption = blockMissing;
+        }
+      }
+    }
+    return { count: bestOption.length, numbers: bestOption };
+  }
+
+  return { count: 99, numbers: [] };
 }
 

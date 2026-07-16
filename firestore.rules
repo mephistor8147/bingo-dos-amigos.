@@ -24,6 +24,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isValidId(userId);
+
+      // Transactions subcollection
+      match /transactions/{transactionId} {
+        allow read, write: if isOwner(userId);
+      }
     }
 
     // Rooms Collection
@@ -48,6 +53,12 @@ service cloud.firestore {
     match /settings/{settingId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isValidId(settingId);
+    }
+
+    // Transactions Collection (for global logs and admin/player audit trails)
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(transactionId);
     }
   }
 }

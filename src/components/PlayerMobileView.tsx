@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
-import { BingoCardData, BingoSpace, Message, GameMode } from '../types';
-import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles, Trophy, Palette } from 'lucide-react';
+import { BingoCardData, BingoSpace, Message, GameMode, Room } from '../types';
+import { User, Clock, Star, Coins, Send, MessageCircle, ArrowLeft, Volume2, VolumeX, Mic, MicOff, Award, Radio, Eye, EyeOff, Sparkles, Trophy, Palette, AlertTriangle } from 'lucide-react';
 import { audioController } from '../audioUtils';
 import { toast } from 'react-hot-toast';
-import { isCardWinner } from '../utils';
+import { isCardWinner, getNumbersNeededToWin } from '../utils';
 
 interface DaubColor {
   id: string;
@@ -17,12 +17,12 @@ interface DaubColor {
 }
 
 const DAUB_COLORS: DaubColor[] = [
-  { id: 'emerald', name: 'Verde', lightBg: 'bg-emerald-200 dark:bg-emerald-950/60', cellText: 'text-emerald-800 dark:text-emerald-300', borderColor: 'border-emerald-300/50 dark:border-emerald-900/50', sampleBg: 'bg-emerald-500' },
-  { id: 'blue', name: 'Azul', lightBg: 'bg-blue-200 dark:bg-blue-950/60', cellText: 'text-blue-800 dark:text-blue-300', borderColor: 'border-blue-300/50 dark:border-blue-900/50', sampleBg: 'bg-blue-500' },
-  { id: 'pink', name: 'Rosa', lightBg: 'bg-pink-100 dark:bg-pink-950/60', cellText: 'text-pink-800 dark:text-pink-300', borderColor: 'border-pink-300/50 dark:border-pink-900/50', sampleBg: 'bg-pink-500' },
-  { id: 'purple', name: 'Roxo', lightBg: 'bg-purple-150 dark:bg-purple-950/60', cellText: 'text-purple-800 dark:text-purple-300', borderColor: 'border-purple-300/50 dark:border-purple-900/50', sampleBg: 'bg-purple-500' },
-  { id: 'orange', name: 'Laranja', lightBg: 'bg-orange-150 dark:bg-orange-950/60', cellText: 'text-orange-800 dark:text-orange-300', borderColor: 'border-orange-300/50 dark:border-orange-900/50', sampleBg: 'bg-orange-500' },
-  { id: 'red', name: 'Vermelho', lightBg: 'bg-red-150 dark:bg-red-950/60', cellText: 'text-red-800 dark:text-red-300', borderColor: 'border-red-300/50 dark:border-red-900/50', sampleBg: 'bg-red-500' },
+  { id: 'emerald', name: 'Verde', lightBg: 'bg-emerald-200 dark:bg-emerald-950/80', cellText: 'text-emerald-950 dark:text-emerald-200', borderColor: 'border-emerald-300 dark:border-emerald-800', sampleBg: 'bg-emerald-500' },
+  { id: 'blue', name: 'Azul', lightBg: 'bg-blue-200 dark:bg-blue-950/80', cellText: 'text-blue-950 dark:text-blue-200', borderColor: 'border-blue-300 dark:border-blue-800', sampleBg: 'bg-blue-500' },
+  { id: 'pink', name: 'Rosa', lightBg: 'bg-pink-200 dark:bg-pink-950/80', cellText: 'text-pink-950 dark:text-pink-200', borderColor: 'border-pink-300 dark:border-pink-800', sampleBg: 'bg-pink-500' },
+  { id: 'purple', name: 'Roxo', lightBg: 'bg-purple-200 dark:bg-purple-950/80', cellText: 'text-purple-950 dark:text-purple-200', borderColor: 'border-purple-300 dark:border-purple-800', sampleBg: 'bg-purple-500' },
+  { id: 'orange', name: 'Laranja', lightBg: 'bg-orange-200 dark:bg-orange-950/80', cellText: 'text-orange-950 dark:text-orange-200', borderColor: 'border-orange-300 dark:border-orange-800', sampleBg: 'bg-orange-500' },
+  { id: 'red', name: 'Vermelho', lightBg: 'bg-red-200 dark:bg-red-950/80', cellText: 'text-red-950 dark:text-red-200', borderColor: 'border-red-300 dark:border-red-800', sampleBg: 'bg-red-500' },
 ];
 
 interface PlayerMobileViewProps {
@@ -45,8 +45,10 @@ interface PlayerMobileViewProps {
   onOpenProfile?: () => void;
   winners?: { uid: string; name: string; avatar?: string }[];
   roomStatus?: 'waiting' | 'active' | 'finished';
-  playersList?: { id: string; name: string; card: BingoCardData }[];
+  playersList?: { id: string; name: string; card: BingoCardData; doubleStageAccepted?: number }[];
   theme?: string;
+  room?: Room;
+  onUpdateCoins?: (newBalance: number) => void;
 }
 
 const COLUMN_COLORS = [
@@ -78,7 +80,7 @@ const formatTime = (seconds: number) => {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 };
 
-export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList, theme = 'emerald' }: PlayerMobileViewProps) {
+export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTimeLeft, scheduledTime, messages, gameMode = 'full_card', participants, prize, bgMusicUrl, onlineRadioUrl, initialSoundEnabled = true, isSpectator = false, onExit, onSendMessage, onOpenProfile, winners, roomStatus, playersList, theme = 'emerald', room, onUpdateCoins }: PlayerMobileViewProps) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
 
   const hasInitializedSpectator = useRef(false);
@@ -89,13 +91,171 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     }
   }, [isSpectator, playersList]);
 
-  const activeCard = useMemo(() => {
-    if (isSpectator && selectedParticipantId) {
-      const selectedPlayer = (playersList || []).find(p => p.id === selectedParticipantId);
-      if (selectedPlayer) return selectedPlayer.card;
+  // Real-time double stage timer countdown
+  const [doubleTimeLeft, setDoubleTimeLeft] = useState(0);
+  useEffect(() => {
+    if (!room || !room.doubleStageTimer) return;
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((room.doubleStageTimer! - Date.now()) / 1000));
+      setDoubleTimeLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [room?.doubleStageTimer]);
+
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "accept" | "refuse";
+    stage?: number;
+  } | null>(null);
+
+  useEffect(() => {
+    // Force close confirmation if game double stage changes
+    setConfirmAction(null);
+  }, [room?.doubleStage]);
+
+  const playerInRoom = room?.players?.find((p) => p.id === user.uid);
+  const myDoubleStatus = playerInRoom?.doubleStageAccepted || 0;
+
+  const handleAcceptDouble = async (targetStage: number) => {
+    setConfirmAction(null);
+    if (!room) return;
+    if (user.coins < room.entryFee) {
+      toast.error("Saldo de moedas insuficiente para aceitar a dobra! 😢");
+      return;
     }
-    return card;
-  }, [card, selectedParticipantId, playersList, isSpectator]);
+
+    try {
+      const { doc, updateDoc, collection, addDoc } = await import("firebase/firestore");
+      const { db } = await import("../lib/firebase");
+
+      // 1. Deduct coins from user doc
+      const userRef = doc(db, "users", user.uid);
+      const newCoins = user.coins - room.entryFee;
+      await updateDoc(userRef, { coins: newCoins });
+
+      // 2. Add transaction history doc under user subcollection
+      await addDoc(collection(db, "users", user.uid, "transactions"), {
+        type: "game_double",
+        amount: 0,
+        coins: room.entryFee,
+        timestamp: Date.now(),
+        status: "completed",
+        description: `Dobra de Cartela (${targetStage === 1 ? "Primeira" : "Última"} Rodada) - Sala ${room.name}`,
+      });
+
+      // 3. Update player subcollection level
+      const playerRef = doc(db, "rooms", room.id, "players", user.uid);
+      await updateDoc(playerRef, { doubleStageAccepted: targetStage });
+
+      // 4. Update parent coins local state
+      if (onUpdateCoins) {
+        onUpdateCoins(newCoins);
+      }
+
+      toast.success(`🎉 Dobra aceita com sucesso! ${room.entryFee} moedas debitadas.`);
+    } catch (e) {
+      console.error("Erro ao aceitar a dobra no Firestore:", e);
+      toast.error("Ocorreu um erro ao processar seu pagamento.");
+    }
+  };
+
+  const handleRefuseDouble = async () => {
+    setConfirmAction(null);
+    if (!room) return;
+    try {
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const { db } = await import("../lib/firebase");
+
+      const playerRef = doc(db, "rooms", room.id, "players", user.uid);
+      await updateDoc(playerRef, { doubleStageAccepted: -1 });
+
+      toast.success("Você recusou a dobra da cartela.");
+    } catch (e) {
+      console.error("Erro ao recusar dobra:", e);
+    }
+  };
+
+  const fallbackCard: BingoCardData = useMemo(() => {
+    return {
+      id: 'fallback',
+      playerName: 'Espectador',
+      grid: [
+        [5, 18, 32, 50, 64],
+        [8, 22, 35, 52, 67],
+        [10, 24, 'FREE', 55, 70],
+        [12, 27, 40, 58, 72],
+        [15, 30, 44, 60, 75]
+      ]
+    };
+  }, []);
+
+  const activeCard = useMemo(() => {
+    if (isSpectator) {
+      if (selectedParticipantId) {
+        const selectedPlayer = (playersList || []).find(p => p.id === selectedParticipantId);
+        if (selectedPlayer?.card) return selectedPlayer.card;
+      }
+      if (playersList && playersList.length > 0 && playersList[0].card) {
+        return playersList[0].card;
+      }
+    }
+    return card || fallbackCard;
+  }, [card, selectedParticipantId, playersList, isSpectator, fallbackCard]);
+
+  const winningProbabilities = useMemo(() => {
+    if (!playersList || playersList.length === 0) return [];
+    
+    // For each player, calculate how many numbers they need to win and which ones
+    const playersData = playersList.map(p => {
+      // Find numbers needed to win
+      const needed = getNumbersNeededToWin(p.card, drawnNumbers, gameMode);
+      return {
+        id: p.id,
+        name: p.name,
+        count: needed.count,
+        numbers: needed.numbers
+      };
+    });
+
+    // Calculate weight for each player
+    const weightedPlayers = playersData.map(p => {
+      let weight = 0;
+      if (p.count === 0) {
+        weight = 1000; // already won / BINGO
+      } else {
+        weight = Math.pow(10 / (p.count + 0.5), 2.2);
+      }
+      return { ...p, weight };
+    });
+
+    // Total weight
+    const totalWeight = weightedPlayers.reduce((acc, p) => acc + p.weight, 0);
+
+    // Normalize weights to percentages
+    const result = weightedPlayers.map(p => {
+      let probability = 0;
+      if (totalWeight > 0) {
+        probability = Math.round((p.weight / totalWeight) * 100);
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        count: p.count,
+        numbers: p.numbers,
+        probability: Math.min(100, Math.max(0, probability))
+      };
+    });
+
+    // Sort by count ascending (fewer numbers needed first), then probability descending
+    return result.sort((a, b) => {
+      if (a.count !== b.count) {
+        return a.count - b.count;
+      }
+      return b.probability - a.probability;
+    });
+  }, [playersList, drawnNumbers, gameMode]);
 
   // We'll mimic the "marked" state based on drawnNumbers for now, but a real app would let user tap.
   // Actually, standard digital bingo auto-daubs or user daubs. Let's make it auto-daub for simplicity,
@@ -103,7 +263,11 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
   const [markedSpaces, setMarkedSpaces] = useState<Set<string>>(new Set());
   const [autoDaub, setAutoDaub] = useState(true);
   const [selectedColorId, setSelectedColorId] = useState(() => {
-    return localStorage.getItem('bingo_daub_color') || 'emerald';
+    try {
+      return localStorage.getItem('bingo_daub_color') || 'emerald';
+    } catch (e) {
+      return 'emerald';
+    }
   });
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
@@ -313,7 +477,10 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     if (!onlineRadioUrl) return;
 
     if (isRadioPlaying) {
-      if (radioAudioRef.current) radioAudioRef.current.pause();
+      if (radioAudioRef.current) {
+        radioAudioRef.current.pause();
+        radioAudioRef.current.src = ""; // Release stream resource to stop background download
+      }
       setIsRadioPlaying(false);
       
       if (soundEnabled) {
@@ -333,6 +500,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       setIsRadioPlaying(true);
       setTimeout(() => {
         if (radioAudioRef.current) {
+          radioAudioRef.current.src = onlineRadioUrl;
+          radioAudioRef.current.load();
           radioAudioRef.current.play().catch(err => {
             console.log("Radio play error:", err);
             toast.error("Impossível reproduzir streaming no momento.");
@@ -351,6 +520,10 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     if (soundEnabled) {
       if (isRadioPlaying && onlineRadioUrl) {
         if (radioAudioRef.current) {
+          if (!radioAudioRef.current.src || radioAudioRef.current.src === window.location.href) {
+            radioAudioRef.current.src = onlineRadioUrl;
+            radioAudioRef.current.load();
+          }
           radioAudioRef.current.play().catch(e => console.log('Radio auto-play on touch error:', e));
         }
       } else if (bgMusicUrl && customAudioRef.current) {
@@ -366,12 +539,19 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     if (soundEnabled) {
       if (bgMusicUrl && customAudioRef.current) customAudioRef.current.pause();
       else audioController.stopBackgroundMusic();
-      if (radioAudioRef.current) radioAudioRef.current.pause();
+      if (radioAudioRef.current) {
+        radioAudioRef.current.pause();
+        radioAudioRef.current.src = ""; // Release stream resource
+      }
       setIsRadioPlaying(false);
       setSoundEnabled(false);
     } else {
       if (isRadioPlaying && onlineRadioUrl) {
-         if (radioAudioRef.current) radioAudioRef.current.play().catch(e => console.log(e));
+         if (radioAudioRef.current) {
+           radioAudioRef.current.src = onlineRadioUrl;
+           radioAudioRef.current.load();
+           radioAudioRef.current.play().catch(e => console.log(e));
+         }
       } else {
          if (bgMusicUrl && customAudioRef.current) customAudioRef.current.play().catch(e => console.log(e));
          else audioController.playBackgroundMusic(bgVolume / 100);
@@ -399,6 +579,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
             // wait briefly for ref to resolve
             setTimeout(() => {
               if (radioAudioRef.current) {
+                radioAudioRef.current.src = onlineRadioUrl;
+                radioAudioRef.current.load();
                 radioAudioRef.current.play().then(() => {
                   setIsRadioPlaying(true);
                 }).catch(e => {
@@ -445,14 +627,14 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
       audioController.playPop();
       
       const lastDrawn = drawnNumbers[drawnNumbers.length - 1];
-      const isOnCard = activeCard.grid.some(row => row.includes(lastDrawn));
+      const isOnCard = activeCard?.grid?.some(row => row && Array.isArray(row) && row.includes(lastDrawn));
       if (isOnCard && autoDaub) {
          setTimeout(() => {
            audioController.playMarkCard();
          }, 300); // slight delay after the pop
       }
     }
-  }, [drawnNumbers.length, soundEnabled, autoDaub, activeCard.grid, audioUnlocked]);
+  }, [drawnNumbers.length, soundEnabled, autoDaub, activeCard?.grid, audioUnlocked]);
   useEffect(() => {
     if (!scheduledTime) return;
     const interval = setInterval(() => {
@@ -515,7 +697,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
     
     const isMarked = (r: number, c: number) => {
       if (r < 0 || r > 4 || c < 0 || c > 4) return false;
-      const cell = activeCard.grid[r][c];
+      const cell = activeCard?.grid?.[r]?.[c];
+      if (cell === undefined) return false;
       return cell === 'FREE' || markedSpaces.has(`${r}-${c}`) || (autoDaub && drawnNumbers.includes(cell as number));
     };
 
@@ -589,7 +772,7 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
        onSendMessage("🎉 BINGO! Eu ganhei! 🎉");
        setTimeout(() => setShowBingoAnimation(false), 5000);
     }
-  }, [markedSpaces, activeCard.grid, hasBingo, onSendMessage, gameMode]);
+  }, [markedSpaces, activeCard?.grid, hasBingo, onSendMessage, gameMode]);
 
   useEffect(() => {
     if (isChatOpen && chatBottomRef.current) {
@@ -902,7 +1085,11 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                               type="button"
                               onClick={() => {
                                 setSelectedColorId(color.id);
-                                localStorage.setItem('bingo_daub_color', color.id);
+                                try {
+                                  localStorage.setItem('bingo_daub_color', color.id);
+                                } catch (e) {
+                                  console.warn("Storage writing is blocked:", e);
+                                }
                                 setIsColorPickerOpen(false);
                               }}
                               className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all active:scale-90 hover:bg-slate-50 dark:hover:bg-slate-800 ${selectedColorId === color.id ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'}`}
@@ -1018,7 +1205,35 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                       : 'bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800'
                   }`}>
                     <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate max-w-[70%]">{p.name}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-extrabold text-slate-800 dark:text-slate-100 text-xs sm:text-sm truncate">{p.name}</span>
+                        {gameMode === 'four_balls_double' && (() => {
+                          const statusVal = p.doubleStageAccepted || 0;
+                          let text = 'Jogando';
+                          let cls = 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400';
+                          if (statusVal === -1) {
+                            text = 'Eliminado ❌';
+                            cls = 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-450';
+                          } else if (room?.doubleStage === 1 && statusVal === 0) {
+                            text = 'Pensando...';
+                            cls = 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse';
+                          } else if (room?.doubleStage === 3 && statusVal === 1) {
+                            text = 'Pensando Sobra Final...';
+                            cls = 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse';
+                          } else if (statusVal === 1) {
+                            text = 'Dobra 1 ✔️';
+                            cls = 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400';
+                          } else if (statusVal === 2) {
+                            text = 'Dobra Final 💎';
+                            cls = 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white border-0';
+                          }
+                          return (
+                            <span className={`text-[9px] font-black uppercase mt-0.5 px-1.5 py-0.5 rounded border border-slate-200/20 w-fit ${cls}`}>
+                              {text}
+                            </span>
+                          );
+                        })()}
+                      </div>
                       {isWinner && (
                         <span className="bg-amber-500 text-white font-black text-[9px] px-2 py-0.5 rounded-lg animate-bounce uppercase tracking-wider">
                           🏆 BINGO!
@@ -1026,8 +1241,8 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                       )}
                     </div>
                     <div className="grid grid-cols-5 gap-1 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-                      {p.card.grid.map((row, rIdx) =>
-                        row.map((cell, cIdx) => {
+                      {(p.card?.grid || []).map((row, rIdx) =>
+                        (row || []).map((cell, cIdx) => {
                           const isFree = cell === 'FREE';
                           const isMarked = isFree || drawnNumbers.includes(cell as number);
                           return (
@@ -1035,10 +1250,10 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                               key={`${rIdx}-${cIdx}`}
                               className={`w-full aspect-square rounded-lg flex items-center justify-center text-[9px] sm:text-xs font-black transition-all ${
                                 isFree
-                                  ? 'bg-yellow-101 border border-amber-300 text-amber-700'
+                                  ? 'bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800/65 text-amber-900 dark:text-amber-200'
                                   : isMarked
-                                  ? 'bg-emerald-500 text-white border border-emerald-600'
-                                  : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-350 border border-slate-100 dark:border-slate-750'
+                                  ? 'bg-emerald-600 dark:bg-emerald-700 text-white border border-emerald-600 dark:border-emerald-800'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-750'
                               }`}
                             >
                               {isFree ? 'F' : cell}
@@ -1116,9 +1331,14 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                           </span>
                         </>
                       ) : (
-                        <span className="text-base sm:text-lg font-black filter drop-shadow-sm">
-                          {letter}-{num}
-                        </span>
+                        <div className="flex flex-col items-center justify-center leading-none">
+                          <span className="text-[7px] sm:text-[8px] font-black tracking-tight opacity-75 uppercase leading-none block">
+                            {letter}
+                          </span>
+                          <span className="text-xs sm:text-sm font-extrabold leading-none mt-0.5 filter drop-shadow-sm block">
+                            {num}
+                          </span>
+                        </div>
                       )}
                     </div>
 
@@ -1148,6 +1368,224 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
               Modo Espectador Ativo
             </div>
             <div className="text-[10px] text-indigo-200">Apenas assistindo</div>
+          </div>
+        )}
+
+        {/* Real-time Spectator Drawn Balls Grid (Tabela Completa de Bolas Sorteadas) */}
+        {isSpectator && (
+          <div id="spectator-drawn-balls-board" className="bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 p-5 rounded-3xl mb-4 max-w-[500px] w-full mx-auto shadow-md">
+            <div className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-100 font-extrabold">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+                Painel Geral de Bolas Sorteadas (1-75)
+              </span>
+              <span className="text-[9px] bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded text-indigo-600 dark:text-indigo-400 font-extrabold select-none border border-indigo-100/40 dark:border-indigo-900/30">
+                Sorteio: {drawnNumbers.length} / 75
+              </span>
+            </div>
+            
+            <div className="flex flex-col gap-3">
+              {['B', 'I', 'N', 'G', 'O'].map((letter, idx) => {
+                const min = idx * 15 + 1;
+                const letterRange = Array.from({ length: 15 }, (_, i) => min + i);
+                
+                let letterColorClass = 'bg-red-500 text-white shadow-red-500/10';
+                if (letter === 'I') letterColorClass = 'bg-purple-500 text-white shadow-purple-500/10';
+                else if (letter === 'N') letterColorClass = 'bg-amber-500 text-slate-950 shadow-amber-500/10';
+                else if (letter === 'G') letterColorClass = 'bg-emerald-500 text-white shadow-emerald-500/10';
+                else if (letter === 'O') letterColorClass = 'bg-sky-500 text-white shadow-sky-500/10';
+
+                return (
+                  <div key={letter} className="flex gap-2.5 items-start bg-slate-50/70 dark:bg-slate-950/20 p-2 rounded-2xl border border-slate-100 dark:border-slate-900">
+                    <span className={`w-8 h-8 rounded-xl font-black text-sm flex items-center justify-center shrink-0 shadow-sm uppercase ${letterColorClass}`}>
+                      {letter}
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 flex-1 items-center">
+                      {letterRange.map((num) => {
+                        const isDrawn = drawnNumbers.includes(num);
+                        const isLatest = drawnNumbers.length > 0 && drawnNumbers[drawnNumbers.length - 1] === num;
+                        const isOnActiveCard = activeCard?.grid?.some(row => row && Array.isArray(row) && row.includes(num)) || false;
+
+                        let ballColorStyles = '';
+                        if (isDrawn) {
+                          if (num <= 15) {
+                            ballColorStyles = 'bg-gradient-to-br from-red-500 to-red-650 text-white border-red-600 shadow-md shadow-red-500/25';
+                          } else if (num <= 30) {
+                            ballColorStyles = 'bg-gradient-to-br from-purple-500 to-purple-650 text-white border-purple-600 shadow-md shadow-purple-500/25';
+                          } else if (num <= 45) {
+                            ballColorStyles = 'bg-gradient-to-br from-amber-400 to-amber-550 text-slate-950 border-amber-500 shadow-md shadow-amber-400/20';
+                          } else if (num <= 60) {
+                            ballColorStyles = 'bg-gradient-to-br from-emerald-500 to-emerald-650 text-white border-emerald-600 shadow-md shadow-emerald-500/25';
+                          } else {
+                            ballColorStyles = 'bg-gradient-to-br from-sky-500 to-sky-650 text-white border-sky-600 shadow-md shadow-sky-500/25';
+                          }
+                        } else {
+                          // Unselected styling
+                          if (isOnActiveCard) {
+                            ballColorStyles = 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-400 dark:border-indigo-600 font-extrabold ring-1 ring-indigo-400 dark:ring-indigo-600/50 shadow-inner';
+                          } else {
+                            ballColorStyles = 'bg-slate-100 dark:bg-slate-800 text-slate-550 dark:text-slate-405 border-slate-250 dark:border-slate-700 font-bold';
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={num}
+                            id={`spectator-ball-${num}`}
+                            title={`Número ${num}${isDrawn ? ' (Sorteado)' : ' (Não sorteado)'}${isOnActiveCard ? ' - Presente na cartela spectada' : ''}`}
+                            className={`relative flex items-center justify-center rounded-full transition-all duration-300 border font-black scale-100 select-none
+                              w-7 h-7 sm:w-[29px] sm:h-[29px] text-[10px] sm:text-xs
+                              ${ballColorStyles}
+                              ${isLatest ? 'ring-4 ring-amber-400 animate-pulse scale-110 z-10 border-amber-500' : ''}
+                              ${isDrawn && !isLatest ? 'hover:scale-105' : ''}
+                            `}
+                          >
+                            <span>{num}</span>
+                            
+                            {/* Tiny bullet indicator below the number to explicitly mark state */}
+                            {isOnActiveCard && (
+                              <span className={`absolute -bottom-0.5 w-[5px] h-[5px] rounded-full ${
+                                isDrawn 
+                                  ? 'bg-white border border-black/20 animate-ping' 
+                                  : 'bg-indigo-600 shadow-md'
+                              }`} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Visual Helper Legends */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-400 justify-center">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-250 dark:border-slate-700" />
+                Não Sorteado
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-50 dark:bg-indigo-950/45 border-2 border-indigo-450 text-[5px] flex items-center justify-center p-0.5 text-indigo-500 font-black">
+                  •
+                </span>
+                Na Cartela (Aguardando)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-600" />
+                Sorteado
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-500 animate-pulse" />
+                Última Bola Sorteada
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 📊 Estatísticas em Tempo Real sobre Probabilidade de Vitória */}
+        {isSpectator && (
+          <div id="spectator-win-probabilities-board" className="bg-white dark:bg-slate-900 border border-indigo-100 dark:border-slate-800 p-5 rounded-3xl mb-4 max-w-[500px] w-full mx-auto shadow-md">
+            <div className="text-[10px] font-black text-slate-400 dark:text-slate-400 uppercase tracking-widest mb-3 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-slate-800 dark:text-slate-100 font-extrabold text-xs">
+                <Trophy className="w-4 h-4 text-amber-500 animate-bounce" />
+                Líderes e Probabilidades de Vitória (%)
+              </span>
+              <span className="text-[9px] bg-emerald-50 dark:bg-emerald-950/65 px-2 py-0.5 rounded text-emerald-600 dark:text-emerald-400 font-extrabold border border-emerald-100/30">
+                Tempo Real
+              </span>
+            </div>
+            
+            <p className="text-slate-500 dark:text-slate-400 text-[11px] font-medium mb-4 leading-relaxed">
+              Cálculo preditivo atualizado instantaneamente a cada nova bola, ponderando os números restantes para o Bingo de cada cartela ativa.
+            </p>
+
+            <div className="space-y-3.5">
+              {winningProbabilities.slice(0, 5).map((p, idx) => {
+                const getBallLetter = (n: number) => n <= 15 ? 'B' : n <= 30 ? 'I' : n <= 45 ? 'N' : n <= 60 ? 'G' : 'O';
+                const rankColors = [
+                  'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 ring-amber-300',
+                  'bg-slate-100 text-slate-700 dark:bg-slate-850 dark:text-slate-300 ring-slate-300',
+                  'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 ring-orange-300'
+                ];
+                const rankBadge = idx < 3 
+                  ? rankColors[idx]
+                  : 'bg-slate-50 text-slate-500 dark:bg-slate-900 dark:text-slate-400 border-slate-200';
+
+                return (
+                  <div key={p.id} className="p-3 bg-slate-50/50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-850 rounded-2xl flex flex-col gap-2 transition-all hover:translate-x-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] ring-1 ${rankBadge}`}>
+                          {idx + 1}
+                        </span>
+                        <span className="font-extrabold text-xs text-slate-800 dark:text-white truncate max-w-[150px]">
+                          {p.name}
+                        </span>
+                        {p.count === 1 && (
+                          <span className="bg-red-500 text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded animate-pulse">
+                            🔥 Na Borda
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-lg border border-indigo-100/30">
+                          {p.count === 0 ? 'BINGO!' : `${p.count} faltam`}
+                        </span>
+                        <span className="text-xs font-black text-emerald-650 dark:text-emerald-400">
+                          {p.probability}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-100 dark:bg-slate-850 h-2.5 rounded-full overflow-hidden relative border border-slate-200/20">
+                      <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${p.probability}%` }}
+                        transition={{ type: "spring", stiffness: 80, damping: 15 }}
+                        className={`h-full bg-gradient-to-r ${
+                          idx === 0 
+                            ? 'from-amber-400 to-emerald-500 shadow-sm shadow-emerald-500/10' 
+                            : 'from-indigo-500 to-indigo-600'
+                        }`} 
+                      />
+                    </div>
+
+                    {/* Pending Numbers */}
+                    {p.count > 0 && p.count <= 6 && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase">Aguardando:</span>
+                        {p.numbers.slice(0, 6).map((num) => {
+                          const letter = getBallLetter(num);
+                          let badgeBg = 'bg-red-50 text-red-600 border-red-100 dark:bg-red-950/20 dark:text-red-400';
+                          if (letter === 'I') badgeBg = 'bg-purple-50 text-purple-600 border-purple-100 dark:bg-purple-950/20 dark:text-purple-400';
+                          else if (letter === 'N') badgeBg = 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-950/20 dark:text-amber-400';
+                          else if (letter === 'G') badgeBg = 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400';
+                          else if (letter === 'O') badgeBg = 'bg-sky-50 text-sky-600 border-sky-100 dark:bg-sky-950/20 dark:text-sky-400';
+
+                          return (
+                            <span key={num} className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border ${badgeBg}`}>
+                              {letter}{num}
+                            </span>
+                          );
+                        })}
+                        {p.numbers.length > 6 && (
+                          <span className="text-[9px] text-slate-400 font-bold">+{p.numbers.length - 6}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {winningProbabilities.length === 0 && (
+                <div className="p-6 text-center text-slate-400 font-bold text-xs bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                  Aguardando início do jogo para gerar probabilidades...
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1192,34 +1630,34 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
           <div className="grid grid-cols-5 gap-1.5 mb-2">
              {COLUMN_LETTERS.map((letter, i) => (
                 <div key={letter} className={`h-8 rounded-xl flex items-center justify-center ${COLUMN_COLORS[i]} border-2 border-white/20 shadow-inner`}>
-                  <span className="text-white font-black text-xl drop-shadow-md">{letter}</span>
+                  <span className="text-white font-black text-base sm:text-xl drop-shadow-md select-none">{letter}</span>
                 </div>
              ))}
           </div>
 
           <div className="bg-white/40 p-1.5 rounded-2xl grid grid-cols-5 gap-1.5 backdrop-blur-sm border border-white/50">
-            {activeCard.grid.map((row, rIdx) => 
+            {(activeCard?.grid || []).map((row, rIdx) => 
                row.map((cell, cIdx) => {
                  const isFree = cell === 'FREE';
                  const isMarked = isFree || markedSpaces.has(`${rIdx}-${cIdx}`) || drawnNumbers.includes(cell as number);
                  const bgClass = isFree 
                     ? 'bg-emerald-400' 
-                    : (isMarked ? currentDaubColor.lightBg : 'bg-white');
+                    : (isMarked ? currentDaubColor.lightBg : 'bg-white dark:bg-slate-800');
                  const textClass = isFree 
                     ? 'text-white' 
-                    : (isMarked ? currentDaubColor.cellText : 'text-slate-800');
+                    : (isMarked ? currentDaubColor.cellText : 'text-slate-800 dark:text-white');
                     
                  return (
                    <button
                      key={`${rIdx}-${cIdx}`}
                      onClick={() => !isSpectator && !isFree && handleSpaceClick(rIdx, cIdx, cell)}
                      disabled={isSpectator}
-                     className={`aspect-square rounded-xl shadow-sm flex items-center justify-center font-black transition-all border-b-4 ${bgClass} ${textClass} ${isMarked ? currentDaubColor.borderColor : 'border-slate-200'} ${isSpectator ? 'cursor-not-allowed opacity-90' : 'active:scale-95'}`}
+                      className={`aspect-square rounded-xl shadow-sm flex items-center justify-center font-black transition-all border-b-4 ${bgClass} ${textClass} ${isMarked ? currentDaubColor.borderColor : 'border-slate-200 dark:border-slate-700'} ${isSpectator ? 'cursor-not-allowed opacity-90' : 'active:scale-95'}`}
                    >
                      {isFree ? (
                        <Star className="w-8 h-8 fill-yellow-300 text-yellow-500 drop-shadow-sm" />
                      ) : (
-                       <span className="text-2xl md:text-3xl tracking-tighter">{cell}</span>
+                       <span className="text-lg sm:text-2xl md:text-3xl tracking-tighter select-none">{cell}</span>
                      )}
                    </button>
                  );
@@ -1249,9 +1687,21 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                  ) : (
                    messages.map(msg => {
                      const isMe = msg.senderId === user.uid;
+                     const isBot = msg.senderId.startsWith('bot_') || msg.senderId.includes('bot') || msg.id.startsWith('botmsg');
                      return (
                        <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                          <span className="text-[10px] font-black text-slate-900 dark:text-slate-200 mb-0.5 px-1">{isMe ? 'Você' : msg.senderName}</span>
+                          <div className="flex items-center gap-1 mb-0.5 px-1">
+                             <span className="text-[10px] font-black text-slate-900 dark:text-slate-300">{isMe ? 'Você' : msg.senderName}</span>
+                             {isMe ? (
+                               <span className="text-[7px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Você</span>
+                             ) : isBot ? (
+                               <span className="text-[7px] bg-sky-500/15 text-sky-600 dark:text-sky-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Bot SIM</span>
+                             ) : (msg.senderId === 'admin' || msg.senderName.toLowerCase().includes('admin')) ? (
+                               <span className="text-[7px] bg-red-500/15 text-red-650 dark:text-red-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Admin</span>
+                             ) : (
+                               <span className="text-[7px] bg-slate-500/15 text-slate-600 dark:text-slate-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Player</span>
+                             )}
+                          </div>
                           <div className={`px-3 py-1.5 rounded-2xl max-w-[85%] text-xs font-bold leading-normal ${isMe ? 'bg-indigo-650 text-white rounded-br-sm shadow-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-950 dark:text-white rounded-bl-sm shadow-sm font-extrabold'}`}>
                             {msg.text}
                           </div>
@@ -1319,7 +1769,18 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                        const isMe = msg.senderId === user.uid;
                        return (
                          <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                            <span className="text-[10px] font-black text-slate-900 dark:text-slate-205 mb-0.5 px-1">{isMe ? 'Você' : msg.senderName}</span>
+                             <div className="flex items-center gap-1 mb-0.5 px-1">
+                                <span className="text-[10px] font-black text-slate-900 dark:text-slate-300">{isMe ? 'Você' : msg.senderName}</span>
+                                {isMe ? (
+                                  <span className="text-[7px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Você</span>
+                                ) : (msg.senderId.startsWith('bot_') || msg.senderId.includes('bot') || msg.id.startsWith('botmsg')) ? (
+                                  <span className="text-[7px] bg-sky-500/15 text-sky-600 dark:text-sky-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Bot SIM</span>
+                                ) : (msg.senderId === 'admin' || msg.senderName.toLowerCase().includes('admin')) ? (
+                                  <span className="text-[7px] bg-red-500/15 text-red-650 dark:text-red-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Admin</span>
+                                ) : (
+                                  <span className="text-[7px] bg-slate-500/15 text-slate-600 dark:text-slate-400 font-extrabold tracking-wider px-1 py-0.2 rounded uppercase select-none font-black scale-90">Player</span>
+                                )}
+                             </div>
                             <div className={`px-3 py-1.5 rounded-2xl max-w-[85%] text-xs font-bold leading-normal ${isMe ? 'bg-indigo-650 text-white rounded-br-sm shadow-sm font-bold' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-950 dark:text-white rounded-bl-sm shadow-sm font-extrabold'}`}>
                               {msg.text}
                             </div>
@@ -1492,6 +1953,186 @@ export function PlayerMobileView({ card, drawnNumbers, user, timeLeft: initialTi
                 </div>
               </motion.div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* 🎲 4 Bolas ou Dobra Prompt Overlays */}
+        <AnimatePresence>
+          {room && room.gameMode === "four_balls_double" && (
+            <>
+              {/* Prompt stage 1 (30 balls) when user has not yet decided */}
+              {room.doubleStage === 1 && myDoubleStatus === 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 text-center"
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.9, y: 20 }}
+                    className="bg-white dark:bg-slate-900 border-4 border-amber-500 rounded-3xl p-6 shadow-2xl max-w-md w-full relative"
+                  >
+                    <div className="absolute top-4 right-4 bg-amber-500 text-white font-extrabold px-3 py-1.5 rounded-lg text-sm animate-pulse">
+                      ⏳ {doubleTimeLeft}s
+                    </div>
+                    <div className="w-16 h-16 bg-amber-100 dark:bg-amber-950/40 rounded-full flex items-center justify-center mb-4 mx-auto text-amber-500">
+                      <AlertTriangle className="w-10 h-10 animate-bounce" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2 uppercase">
+                      ⚠️ SOLICITAÇÃO DE DOBRA!
+                    </h3>
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
+                      O sorteio atingiu {room.fourBallsStage1Limit || 30} bolas e não houve vencedor! Você quer aceitar a dobra por{" "}
+                      <span className="text-amber-500">R$ {room.entryFee} moedas</span> para continuar com o sorteio de mais {(room.fourBallsStage2Limit || 42) - (room.fourBallsStage1Limit || 30)} bolas adicionais? Se recusar, você sairá da disputa.
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => setConfirmAction({ type: "accept", stage: 1 })}
+                        className="w-full bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold py-3.5 rounded-xl text-xs sm:text-sm tracking-wider uppercase shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        <Coins className="w-4 h-4 text-amber-100 fill-amber-100 shrink-0" />
+                        Pagar e Continuar (R$ {room.entryFee} Moedas)
+                      </button>
+                      <button
+                        onClick={() => setConfirmAction({ type: "refuse", stage: 1 })}
+                        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-350 font-bold py-2.5 rounded-xl text-xs tracking-wider uppercase transition-colors"
+                      >
+                        Recusar e Ver como Espectador
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {/* Prompt stage 3 (42 balls) when user has decided Stage 1, but has not yet decided Stage 3 */}
+              {room.doubleStage === 3 && myDoubleStatus === 1 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4 text-center"
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, y: 20 }}
+                    animate={{ scale: 1, y: 0 }}
+                    exit={{ scale: 0.9, y: 20 }}
+                    className="bg-white dark:bg-slate-900 border-4 border-emerald-500 rounded-3xl p-6 shadow-2xl max-w-md w-full relative"
+                  >
+                    <div className="absolute top-4 right-4 bg-emerald-500 text-white font-extrabold px-3 py-1.5 rounded-lg text-sm animate-pulse">
+                      ⏳ {doubleTimeLeft}s
+                    </div>
+                    <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/40 rounded-full flex items-center justify-center mb-4 mx-auto text-emerald-500">
+                      <Sparkles className="w-10 h-10 animate-spin" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2 uppercase text-emerald-600 dark:text-emerald-400">
+                      ⚡ ÚLTIMA RODADA - DOBRA!
+                    </h3>
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
+                      A rodada extra de {(room.fourBallsStage2Limit || 42) - (room.fourBallsStage1Limit || 30)} bolas terminou sem ganhadores! Deseja pagar mais uma dobra de{" "}
+                      <span className="text-emerald-500">R$ {room.entryFee} moedas</span> para habilitar as últimas {(room.fourBallsStage3Limit || 50) - (room.fourBallsStage2Limit || 42)} bolas finais do sorteio decisivo?
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => setConfirmAction({ type: "accept", stage: 2 })}
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-extrabold py-3.5 rounded-xl text-xs sm:text-sm tracking-wider uppercase shadow-md transition-all flex items-center justify-center gap-2"
+                      >
+                        <Coins className="w-4 h-4 text-emerald-100 fill-emerald-100 shrink-0" />
+                        Pagar Dobra Final (R$ {room.entryFee} Moedas)
+                      </button>
+                      <button
+                        onClick={() => setConfirmAction({ type: "refuse", stage: 2 })}
+                        className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-350 font-bold py-2.5 rounded-xl text-xs tracking-wider uppercase transition-colors"
+                      >
+                        Recusar e Ver como Espectador
+                      </button>
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+
+              {/* Pop-up de Confirmação customizado para Aceitar ou Recusar a dobra */}
+              <AnimatePresence>
+                {confirmAction && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 text-center"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, y: 15 }}
+                      animate={{ scale: 1, y: 0 }}
+                      exit={{ scale: 0.9, y: 15 }}
+                      className="bg-white dark:bg-slate-900 border-4 border-indigo-500 rounded-3xl p-6 shadow-2xl max-w-sm w-full relative"
+                    >
+                      {confirmAction.type === "accept" ? (
+                        <>
+                          <div className="w-16 h-16 bg-amber-50 dark:bg-amber-950/40 rounded-full flex items-center justify-center mb-4 mx-auto text-amber-500 border border-amber-300">
+                            <Coins className="w-10 h-10 animate-pulse fill-amber-300" />
+                          </div>
+                          <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2 uppercase text-indigo-600 dark:text-indigo-400">
+                            👛 Confirmar Dobra?
+                          </h3>
+                          <p className="text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-6">
+                            Deseja autorizar o débito de{" "}
+                            <span className="text-amber-500 font-extrabold">R$ {room.entryFee} moedas</span> do seu saldo para continuar jogando? Seu saldo atual é de R$ {user.coins} moedas.
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            <button
+                              onClick={() => handleAcceptDouble(confirmAction.stage || 1)}
+                              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-white font-extrabold py-3.5 rounded-xl text-xs sm:text-sm tracking-wider uppercase shadow-lg transition-all"
+                            >
+                              Sim, Pagar e Continuar
+                            </button>
+                            <button
+                              onClick={() => setConfirmAction(null)}
+                              className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 font-bold py-2.5 rounded-xl text-xs tracking-wider uppercase transition-colors"
+                            >
+                              Não, Voltar
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/45 rounded-full flex items-center justify-center mb-4 mx-auto text-rose-500 border border-rose-300">
+                            <AlertTriangle className="w-10 h-10 animate-bounce" />
+                          </div>
+                          <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2 uppercase text-rose-600 dark:text-rose-400">
+                            ❌ Desistir da Rodada?
+                          </h3>
+                          <p className="text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-6 text-rose-650 dark:text-rose-350">
+                            Atenção! Ao recusar a dobra você será <span className="underline font-black">ELIMINADO</span> permanentemente desta sala e só poderá assistir ao restante do sorteio como espectador. Tem certeza?
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            <button
+                              onClick={handleRefuseDouble}
+                              className="w-full bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold py-3.5 rounded-xl text-xs sm:text-sm tracking-wider uppercase shadow-lg transition-all"
+                            >
+                              Sim, Desistir
+                            </button>
+                            <button
+                              onClick={() => setConfirmAction(null)}
+                              className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-250 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-350 font-bold py-2.5 rounded-xl text-xs tracking-wider uppercase transition-colors"
+                            >
+                              Não, Continuar
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Informational overlay for Spectating because user declined */}
+              {myDoubleStatus === -1 && room.status === "active" && (
+                <div className="fixed bottom-6 left-6 z-40 bg-slate-900/90 dark:bg-slate-950/95 text-white px-4 py-3 rounded-2xl border border-slate-700/60 shadow-lg text-xs font-bold pointer-events-none max-w-xs leading-relaxed animate-bounce duration-1000">
+                  🍿 Modo Espectador Ativo! Como você recusou a dobra, o sorteio continua para quem aceitou. Divirta-se assistindo!
+                </div>
+              )}
+            </>
           )}
         </AnimatePresence>
 

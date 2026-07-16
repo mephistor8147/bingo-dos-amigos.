@@ -24,9 +24,10 @@ export interface Player {
   id: string;
   name: string;
   card: BingoCardData;
+  doubleStageAccepted?: number; // 0 = none / pending, -1 = declined, 1 = accepted double 1, 2 = accepted double 2
 }
 
-export type GameMode = 'full_card' | 'line' | 'block_of_4' | 'bot_vs_bot';
+export type GameMode = 'full_card' | 'line' | 'block_of_4' | 'bot_vs_bot' | 'four_balls_double';
 
 export interface Room {
   id: string;
@@ -40,6 +41,12 @@ export interface Room {
   messages: Message[];
   gameMode?: GameMode;
   prize?: number;
+  prizeMode?: 'fixed' | 'cumulative' | 'cumulative_jackpot' | 'four_balls_double';
+  doubleStage?: number; // 0 = start (up to 30), 1 = wait double 1, 2 = play 12 more (up to 42), 3 = wait double 2, 4 = play 8 more (up to 50), 5 = game-over no winner
+  doubleStageTimer?: number; // timestamp until stage ends
+  fourBallsStage1Limit?: number;
+  fourBallsStage2Limit?: number;
+  fourBallsStage3Limit?: number;
   bgMusicUrl?: string;
   onlineRadioUrl?: string;
   backgroundImageUrl?: string;

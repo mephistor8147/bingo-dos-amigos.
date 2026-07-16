@@ -120,9 +120,62 @@ ${chatHistoryText || "(O chat está vazio)"}
 
       res.json({ text: parsed.text || "Vambora bingo! 🔥" });
     } catch (error: any) {
-      console.error("Gemini Bot message generation failed:", error);
-      res.status(500).json({
-        error: error instanceof Error ? error.message : "Error generating bot message",
+      console.warn("Gemini Bot message generation failed, recovering with realistic offline fallback:", error);
+      
+      const fallbackReplies = [
+        "Vambora bingo! 🔥",
+        "Eita, falta pouco pra mim!",
+        "Esse número aí passou longe do meu kkk",
+        "Quem vencer essa paga o café!",
+        "Quase lá hein!",
+        "Minha cartela tá viva ainda, bora de bingo!",
+        "Cadê a sorte agora? kkk",
+        "Bora que essa rodada é minha!",
+        "Falta bem pouquinho aqui, só 2 números!",
+        "Sorte pra nós galera!",
+        "Alguém me dá um amuleto da sorte kkk",
+        "Apostei tudo nessa sala rsrs",
+        "Torcendo muito aqui pra dar bom!",
+        "Se sair meu número eu dou um grito kkk"
+      ];
+      
+      const directReplies = [
+        "Concordo plenamente! kkk",
+        "Eita, será?",
+        "Tamo junto nessa haha!",
+        "Será que sai agora?",
+        "Eita jogo tenso!",
+        "Boa sorte pra nós!",
+        "kkk essa foi boa",
+        "Tomara que dê certo!",
+        "Manda ver!",
+        "Não desiste não rsrs",
+        "Vamo pro topo!"
+      ];
+
+      let selectedText = "";
+      if (req.body && req.body.triggerType === "direct_reply") {
+        const randomIndex = Math.floor(Math.random() * directReplies.length);
+        selectedText = directReplies[randomIndex];
+        
+        // If there's a last message from a non-bot player, mention them for realism
+        const messagesList = req.body.messages;
+        if (messagesList && messagesList.length > 0) {
+          const lastMsg = messagesList[messagesList.length - 1];
+          if (lastMsg && lastMsg.senderName && !lastMsg.senderName.startsWith("bot_") && !lastMsg.senderName.includes("bot")) {
+            if (Math.random() > 0.3) {
+              selectedText = `@${lastMsg.senderName} ${selectedText.toLowerCase()}`;
+            }
+          }
+        }
+      } else {
+        const randomIndex = Math.floor(Math.random() * fallbackReplies.length);
+        selectedText = fallbackReplies[randomIndex];
+      }
+
+      res.status(200).json({ 
+        text: selectedText,
+        fallback: true
       });
     }
   });
